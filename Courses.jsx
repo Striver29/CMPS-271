@@ -1,6 +1,6 @@
 // pages/Courses.jsx
 import React, { useState } from "react";
-import CourseForm from "../components/CourseForm";
+import CourseForm from "./CourseForm";
 
 export default function Courses({ courses, setCourses }) {
   const [confirmDelete, setConfirmDelete] = useState({ show: false, id: null });

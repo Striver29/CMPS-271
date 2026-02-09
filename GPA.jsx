@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { calculateGPA } from "../gpaCalculator";
+import { calculateGPA } from "./gpaCalculator";
 
 const semesters = ["Fall2026", "Spring2026", "Summer2026"];
 
