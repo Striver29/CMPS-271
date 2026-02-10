@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from "react-router-do
 import Dashboard from "./Dashboard.jsx";
 import Courses from "./Courses.jsx";
 import GPA from "./GPA";
+import Rate from "./Rate";
 
 
 export default function App() {
@@ -48,7 +49,7 @@ export default function App() {
               path="/courses"
               element={<Courses courses={courses} setCourses={setCourses} />}
             />
-            {/* <Route path="/rate" element={<Rate />} /> */}
+            {<Route path="/rate" element={<Rate />} /> }
             <Route path="/gpa" element={<GPA courses={courses} />} />
           </Routes>
         </div>
