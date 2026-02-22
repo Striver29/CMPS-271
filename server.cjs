@@ -1,37 +1,61 @@
-// server.cjs
-
+console.log("File started");
 const express = require("express");
 const cors = require("cors");
-const { professors, ratings } = require("./database.cjs");
+require("dotenv").config();
 
-console.log("PROFESSORS AT START:", professors);
-console.log("RATINGS AT START:", ratings);
-
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
-const PORT = 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173"
+}));
+
 app.use(express.json());
 
-// TEST ROUTE
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+app.get("/api/terms", async (req, res) => {
+  const { data, error } = await supabase
+    .from("terms")
+    .select("*")
+    .order("code", { ascending: false });
+
+  if (error) return res.status(500).json(error);
+
+  const cleaned = data.map(t => ({
+    ...t,
+    description: t.description.replace(" (View Only)", "").trim()
+  }));
+
+  res.json(cleaned);
 });
 
-// RATINGS ROUTE
-app.get("/ratings", (req, res) => {
-  const result = ratings.map(r => {
-    const prof = professors.find(p => p.id === r.professorId);
-    return {
-      ...r,
-      professorName: prof ? prof.name : "Unknown"
-    };
-  });
+app.get("/api/courses", async (req, res) => {
+  const { term, search } = req.query;
 
-  res.json(result);
+  let query = supabase
+    .from("courses")
+    .select("*, professors(full_name)")
+    .eq("semester", term);
+
+  if (search) {
+    query = query.or(
+      `title.ilike.%${search}%,department.ilike.%${search}%,crn.eq.${search},course_number.ilike.%${search}%`
+    );
+  }
+
+  const { data, error } = await query.range(0, 5000);;
+  if (error) return res.status(500).json(error);
+  res.json(data);
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+console.log("About to listen...");
+app.listen(3001, () => {
+  console.log("Server running on http://localhost:3001");
 });
+
+process.stdin.resume();

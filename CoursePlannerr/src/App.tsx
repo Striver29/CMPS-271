@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import './App.css';
 import type { Course } from './types';
-import { COURSES, SEMESTERS } from './mockData';
 import { TopNav } from './components/TopNav';
 import { LeftInfoPanel } from './components/LeftInfoPanel';
 import { ScheduleGrid } from './components/ScheduleGrid';
@@ -10,14 +9,55 @@ import { RightSearchPanel } from './components/RightSearchPanel';
 export default function App() {
   const appName = 'AUB Course Planner';
 
-  const [semesterId, setSemesterId] = useState(SEMESTERS[0]!.id);
-  const semesterLabel = useMemo(
-    () => SEMESTERS.find((s) => s.id === semesterId)?.label ?? 'Semester',
-    [semesterId]
-  );
+const [semesters, setSemesters] = useState<{ id: string; label: string }[]>([]);
+const [semesterId, setSemesterId] = useState('');
+const semesterLabel = useMemo(
+  () => semesters.find((s) => s.id === semesterId)?.label ?? 'Semester',
+  [semesterId, semesters]
+);
+
+useEffect(() => {
+  fetch('http://localhost:3001/api/terms')
+    .then(res => res.json())
+    .then((data) => {
+      const formatted = data.map((t: { code: string; description: string }) => ({
+        id: t.code,
+        label: t.description
+      }));
+      setSemesters(formatted);
+      const current = data.find((t: any) => t.is_current);
+      if (current) setSemesterId(current.code);
+    });
+}, []);
+
+const [allCourses, setAllCourses] = useState<Course[]>([]);
+
+useEffect(() => {
+  if (!semesterId) return;
+  fetch(`http://localhost:3001/api/courses?term=${semesterId}`)
+    .then(res => res.json())
+    .then((data) => {
+      const formatted = data.map((c: any) => ({
+        id: c.id,
+        crn: c.crn,
+        code: `${c.department} ${c.course_number}`,
+        title: c.title,
+        credits: c.credits,
+        instructor: c.professors?.full_name ?? 'TBA',
+        section: c.schedule?.section ?? '',
+        days: c.schedule?.days ?? '',
+        time: c.schedule?.time ?? '',
+        location: c.schedule?.location ?? '',
+        difficulty: 0,
+        seatsAvailable: c.capacity - c.enrolled_count,
+        maxEnrollment: c.capacity,
+      }));
+      setAllCourses(formatted);
+    });
+}, [semesterId]);
 
   const [activeLeftTab, setActiveLeftTab] = useState<'welcome' | 'info' | 'crn'>('info');
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(COURSES[0] ?? null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
   const [scheduled, setScheduled] = useState<Course[]>([]);
   const [favorites, setFavorites] = useState<Course[]>([]);
@@ -59,7 +99,7 @@ export default function App() {
       <TopNav
         appName={appName}
         semesterId={semesterId}
-        semesters={SEMESTERS}
+        semesters={semesters}
         semesterLabel={semesterLabel}
         lastUpdatedText={lastUpdatedText}
         onSemesterChange={setSemesterId}
@@ -79,7 +119,7 @@ export default function App() {
         />
 
         <RightSearchPanel
-          allCourses={COURSES}
+          allCourses={allCourses}
           scheduled={scheduled}
           favorites={favorites}
           onSelectCourse={selectCourse}
