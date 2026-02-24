@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import type { Course } from './types';
@@ -9,6 +9,7 @@ import { RightSearchPanel } from './components/RightSearchPanel';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import Reviews from './pages/Reviews';
+import { supabase } from './supabaseClient.ts';
 
 const COURSE_COLORS = [
   "#1a5fa8","#1a7a45","#6b2d8b","#b35a0a","#0e6b5e",
@@ -96,17 +97,78 @@ export default function App() {
   const [activeLeftTab, setActiveLeftTab] = useState<'welcome' | 'info' | 'crn'>('info');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [hoveredCourse, setHoveredCourse] = useState<Course | null>(null);
-  const [scheduled, setScheduled] = useState<Course[]>([]);
   const [favorites, setFavorites] = useState<Course[]>([]);
   const [customColors, setCustomColors] = useState<Map<string, string>>(new Map());
+
+  // ── Schedule slots ──────────────────────────────────────────────
+  const [activeSlot, setActiveSlot] = useState(1);
+  const [schedules, setSchedules] = useState<Record<number, Course[]>>({ 1: [], 2: [], 3: [] });
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUserId(data.session?.user.id ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('schedules')
+      .select('slot, courses')
+      .eq('user_id', userId)
+      .then(({ data }) => {
+        if (!data) return;
+        const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
+        data.forEach((row: any) => { loaded[row.slot] = row.courses; });
+        setSchedules(loaded);
+      });
+  }, [userId]);
+
+  const saveSlot = useCallback(async (slot: number, courses: Course[]) => {
+    if (!userId) return;
+    await supabase.from('schedules').upsert(
+      { user_id: userId, slot, courses, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,slot' }
+    );
+  }, [userId]);
+
+  const scheduled = schedules[activeSlot] ?? [];
+
+  const toggleSchedule = (course: Course) => {
+    const current = schedules[activeSlot];
+    const exists = current.some(c => c.id === course.id);
+    const updated = exists ? current.filter(c => c.id !== course.id) : [...current, course];
+    const newSchedules = { ...schedules, [activeSlot]: updated };
+    setSchedules(newSchedules);
+    saveSlot(activeSlot, updated);
+  };
+  // ───────────────────────────────────────────────────────────────
 
   const scheduledIds = useMemo(() => new Set(scheduled.map((c) => c.id)), [scheduled]);
   const selectedCrns = useMemo(() => scheduled.map((c) => c.crn), [scheduled]);
   const totalCredits = useMemo(() => scheduled.reduce((acc, c) => acc + (c.credits ?? 0), 0), [scheduled]);
-  const averageDifficulty = useMemo(() => {
-    if (scheduled.length === 0) return null;
-    return scheduled.reduce((acc, c) => acc + c.difficulty, 0) / scheduled.length;
-  }, [scheduled]);
+  const [courseDifficulties, setCourseDifficulties] = useState<Record<string, number>>({});
+
+useEffect(() => {
+  scheduled.forEach(c => {
+    const [dept, num] = c.code.split(' ');
+    if (courseDifficulties[c.code] !== undefined) return;
+    fetch(`http://localhost:3001/api/ratings/course/${dept}/${num}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.averages?.difficulty > 0) {
+          setCourseDifficulties(prev => ({ ...prev, [c.code]: parseFloat(data.averages.difficulty) }));
+        }
+      });
+  });
+}, [scheduled]);
+
+const averageDifficulty = useMemo(() => {
+  const rated = scheduled.filter(c => courseDifficulties[c.code] !== undefined);
+  if (rated.length === 0) return null;
+  return rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) / rated.length;
+}, [scheduled, courseDifficulties]);
 
   const courseColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -121,13 +183,6 @@ export default function App() {
   };
 
   const displayedCourse = hoveredCourse ?? selectedCourse;
-
-  const toggleSchedule = (course: Course) => {
-    setScheduled((prev) => {
-      const exists = prev.some((c) => c.id === course.id);
-      return exists ? prev.filter((c) => c.id !== course.id) : [...prev, course];
-    });
-  };
 
   const toggleFavorite = (course: Course) => {
     setFavorites((prev) => {
@@ -183,6 +238,8 @@ export default function App() {
           onHoverCourse={handleHoverCourse}
           averageDifficulty={averageDifficulty}
           totalCredits={totalCredits}
+          activeSlot={activeSlot}
+          onSlotChange={setActiveSlot}
         />
       </div>
     </div>

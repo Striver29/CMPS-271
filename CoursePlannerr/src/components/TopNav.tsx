@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../supabaseClient.ts';
 
 type Props = {
   appName: string;
@@ -101,7 +102,10 @@ export function TopNav({
               </option>
             ))}
           </select>
-          <button className="topNav__logout" type="button">Logout</button>
+          <button className="topNav__logout" type="button" onClick={async () => {
+          await supabase.auth.signOut();
+          navigate('/login');
+        }}>Logout</button>
         </div>
       </header>
 

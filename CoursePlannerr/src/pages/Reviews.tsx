@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient.ts';
 
 const API = 'http://localhost:3001';
@@ -80,9 +80,9 @@ function getDistribution(ratings: { rating: number }[]) {
 
 export default function Reviews() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('courses');
 
-  // Auth
   const [userId, setUserId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -121,6 +121,44 @@ export default function Reviews() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const loadCourseRatings = (dept: string, num: string) => {
+    fetch(`${API}/api/ratings/course/${dept}/${num}`)
+      .then(r => r.json())
+      .then(data => { setCourseRatings(data.ratings || []); setCourseAvg(data.averages || null); });
+  };
+
+  const handleSelectCourse = (c: { department: string; course_number: string; title: string }) => {
+    setSelectedCourse(c);
+    setCourseSearch(`${c.department} ${c.course_number}`);
+    setCourseResults([]);
+    setShowForm(false);
+    setSubmitted(false);
+    setSubmitError(null);
+    loadCourseRatings(c.department, c.course_number);
+  };
+
+  // Pre-fill from URL param
+  useEffect(() => {
+    const course = searchParams.get('course');
+    if (!course) return;
+    const parts = course.trim().toUpperCase().split(' ');
+    const dept = parts[0];
+    const num = parts[1] || '';
+    setCourseSearch(course);
+    setTab('courses');
+    setShowForm(true);
+    fetch(`${API}/api/courses?term=202620&search=${encodeURIComponent(dept)}`)
+      .then(r => r.json())
+      .then(data => {
+        for (const c of data) {
+          if (c.department === dept && c.course_number === num) {
+            handleSelectCourse({ department: c.department, course_number: c.course_number, title: c.title });
+            break;
+          }
+        }
+      });
+  }, []);
+
   useEffect(() => {
     if (courseSearch.length < 2) { setCourseResults([]); return; }
     const parts = courseSearch.trim().toUpperCase().split(' ');
@@ -151,22 +189,10 @@ export default function Reviews() {
       .catch(() => setProfResults([]));
   }, [profSearch]);
 
-  const loadCourseRatings = (dept: string, num: string) => {
-    fetch(`${API}/api/ratings/course/${dept}/${num}`)
-      .then(r => r.json())
-      .then(data => { setCourseRatings(data.ratings || []); setCourseAvg(data.averages || null); });
-  };
-
   const loadProfRatings = (profId: string) => {
     fetch(`${API}/api/ratings/professor/${profId}`)
       .then(r => r.json())
       .then(data => { setProfRatings(data.ratings || []); setProfAvg(data.averages || null); });
-  };
-
-  const handleSelectCourse = (c: { department: string; course_number: string; title: string }) => {
-    setSelectedCourse(c); setCourseSearch(`${c.department} ${c.course_number}`);
-    setCourseResults([]); setShowForm(false); setSubmitted(false); setSubmitError(null);
-    loadCourseRatings(c.department, c.course_number);
   };
 
   const handleSelectProf = (p: { id: string; full_name: string }) => {
@@ -194,9 +220,10 @@ export default function Reviews() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        // Handle unique constraint: user already rated this course
         if (res.status === 409 || err?.code === '23505') {
           setSubmitError("You've already rated this course.");
+        } else if (res.status === 400) {
+          setSubmitError("⚠️ Your review contains inappropriate content and was not submitted.");
         } else {
           setSubmitError('Something went wrong. Please try again.');
         }
@@ -232,6 +259,8 @@ export default function Reviews() {
         const err = await res.json().catch(() => ({}));
         if (res.status === 409 || err?.code === '23505') {
           setSubmitError("You've already rated this professor for that course.");
+        } else if (res.status === 400) {
+          setSubmitError("⚠️ Your review contains inappropriate content and was not submitted.");
         } else {
           setSubmitError('Something went wrong. Please try again.');
         }
@@ -341,7 +370,6 @@ export default function Reviews() {
       </header>
 
       <div style={{ maxWidth: 900, margin: '40px auto', padding: '0 24px' }}>
-        {/* Search */}
         <div style={{ position: 'relative', marginBottom: 32 }}>
           <input
             style={{ ...inputStyle, width: '100%', fontSize: 16, padding: '14px 18px', boxSizing: 'border-box' }}
@@ -373,7 +401,6 @@ export default function Reviews() {
           )}
         </div>
 
-        {/* Course detail */}
         {tab === 'courses' && selectedCourse && (() => {
           const dist = getDistribution(courseRatings);
           return (
@@ -409,7 +436,6 @@ export default function Reviews() {
           );
         })()}
 
-        {/* Professor detail */}
         {tab === 'professors' && selectedProf && (() => {
           const dist = getDistribution(profRatings);
           return (
