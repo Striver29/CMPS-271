@@ -11,6 +11,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Reviews from './pages/Reviews';
 import { supabase } from './supabaseClient.ts';
 import UpdatePassword from "./pages/UpdatePassword.tsx";
+import { AIScheduler } from './components/AIScheduler';
 
 const COURSE_COLORS = [
   "#1a5fa8","#1a7a45","#6b2d8b","#b35a0a","#0e6b5e",
@@ -239,6 +240,17 @@ export default function App() {
     if (course) setActiveLeftTab('info');
   };
 
+  const handleApplyAISchedule = (courses: Course[]) => {
+    const newSchedules = { ...schedules, [activeSlot]: courses };
+    setSchedules(newSchedules);
+    saveSlot(activeSlot, courses);
+    // Auto-favorite all AI-scheduled courses
+    courses.forEach(c => {
+      const alreadyFav = favorites.some(f => f.id === c.id);
+      if (!alreadyFav) toggleFavorite(c);
+    });
+  };
+
   const mainApp = (
     <div className="appShell">
       <TopNav
@@ -280,6 +292,11 @@ export default function App() {
           onSlotChange={setActiveSlot}
         />
       </div>
+      <AIScheduler
+        allCourses={allCourses}
+        onApplySchedule={handleApplyAISchedule}
+        activeSlot={activeSlot}
+      />
     </div>
   );
 
