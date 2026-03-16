@@ -8,6 +8,15 @@ export default function ProtectedRoute({ children }: any) {
 
   useEffect(() => {
     const checkAuth = async () => {
+      // If this is an email confirmation or password recovery redirect, block access
+      const hash = window.location.hash;
+      if (hash.includes("type=signup") || hash.includes("type=recovery")) {
+        await supabase.auth.signOut();
+        setAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase.auth.getSession();
       setAuthenticated(!!data.session);
       setLoading(false);
@@ -18,7 +27,7 @@ export default function ProtectedRoute({ children }: any) {
 
   if (loading) return <div>Loading...</div>;
 
-  if (!authenticated) return <Navigate to="/login" />;
+  if (!authenticated) return <Navigate to="/login?confirmed=true" />;
 
   return children;
 }

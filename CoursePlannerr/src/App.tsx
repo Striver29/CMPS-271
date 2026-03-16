@@ -29,6 +29,20 @@ export default function App() {
   );
 
   useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        // Check if this is an email confirmation (hash contains type=signup)
+        const hash = window.location.hash;
+        if (hash.includes("type=signup") || hash.includes("type=recovery")) {
+          supabase.auth.signOut();
+          window.location.replace("/login?confirmed=true");
+        }
+      }
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+  
+  useEffect(() => {
     fetch('http://localhost:3001/api/terms')
       .then(res => res.json())
       .then((data) => {

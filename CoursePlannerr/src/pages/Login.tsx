@@ -1,5 +1,5 @@
 // src/pages/Login.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
@@ -16,6 +16,13 @@ export default function Login() {
   const [info, setInfo] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("confirmed") === "true") {
+      setSuccess("Email confirmed! You can now sign in.");
+    }
+  }, []);
 
   const resetBanners = () => { setError(""); setInfo(""); setSuccess(""); };
   const switchView = (v) => {
@@ -176,38 +183,18 @@ const css = `
     max-width: 400px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
   }
-  .uf-logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 28px;
-  }
+  .uf-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
   .uf-logo-mark {
-    width: 32px; height: 32px;
-    border-radius: 8px;
-    background: #2563eb;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+    width: 32px; height: 32px; border-radius: 8px; background: #2563eb;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
-  .uf-logo-name {
-    font-size: 17px;
-    font-weight: 600;
-    color: #111827;
-  }
-  .uf-tabs {
-    display: flex;
-    border-bottom: 1px solid #e5e7eb;
-    margin-bottom: 28px;
-  }
+  .uf-logo-name { font-size: 17px; font-weight: 600; color: #111827; }
+  .uf-tabs { display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 28px; }
   .uf-tab {
-    flex: 1;
-    padding: 9px 0;
-    background: none; border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
+    flex: 1; padding: 9px 0; background: none; border: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 13px; font-weight: 500;
-    color: #9ca3af;
+    font-size: 13px; font-weight: 500; color: #9ca3af;
     cursor: pointer; transition: all .2s;
   }
   .uf-tab:hover { color: #6b7280; }
@@ -216,42 +203,28 @@ const css = `
   .uf-field { display: flex; flex-direction: column; gap: 6px; }
   .uf-label { font-size: 12px; font-weight: 500; color: #6b7280; }
   .uf-input {
-    padding: 10px 13px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    padding: 10px 13px; background: #f9fafb;
+    border: 1px solid #e5e7eb; border-radius: 8px;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 14px; color: #111827;
-    outline: none;
+    font-size: 14px; color: #111827; outline: none;
     transition: border-color .2s, box-shadow .2s;
   }
   .uf-input::placeholder { color: #d1d5db; }
   .uf-input:hover { border-color: #d1d5db; }
-  .uf-input:focus {
-    border-color: #2563eb;
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-  }
+  .uf-input:focus { border-color: #2563eb; background: #fff; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
   .uf-btn {
-    width: 100%; padding: 11px;
-    background: #2563eb; border: none; border-radius: 8px;
-    color: #fff;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 14px; font-weight: 600;
-    cursor: pointer;
-    transition: background .15s, transform .15s;
-    margin-top: 2px;
+    width: 100%; padding: 11px; background: #2563eb; border: none; border-radius: 8px;
+    color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s, transform .15s; margin-top: 2px;
   }
   .uf-btn:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); }
   .uf-btn:active:not(:disabled) { transform: translateY(0); }
   .uf-btn:disabled { opacity: 0.55; cursor: not-allowed; }
   .uf-ghost {
-    background: none; border: none;
-    width: 100%; text-align: center;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 13px; color: #9ca3af;
-    cursor: pointer; transition: color .15s;
-    margin-top: -4px;
+    background: none; border: none; width: 100%; text-align: center;
+    font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; color: #9ca3af;
+    cursor: pointer; transition: color .15s; margin-top: -4px;
   }
   .uf-ghost:hover { color: #2563eb; }
   .uf-reset-hint { font-size: 13px; color: #6b7280; line-height: 1.6; margin-bottom: 4px; }
@@ -260,9 +233,7 @@ const css = `
   .uf-banner--info    { background: #eff6ff; border: 1px solid #bfdbfe; color: #2563eb; }
   .uf-banner--success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
   .uf-footer {
-    margin-top: 28px; padding-top: 20px;
-    border-top: 1px solid #f3f4f6;
-    text-align: center;
-    font-size: 11px; color: #d1d5db;
+    margin-top: 28px; padding-top: 20px; border-top: 1px solid #f3f4f6;
+    text-align: center; font-size: 11px; color: #d1d5db;
   }
 `;
