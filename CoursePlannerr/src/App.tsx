@@ -10,6 +10,8 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import Reviews from './pages/Reviews';
 import { supabase } from './supabaseClient.ts';
+import UpdatePassword from "./pages/UpdatePassword.tsx";
+
 
 const COURSE_COLORS = [
   "#1a5fa8","#1a7a45","#6b2d8b","#b35a0a","#0e6b5e",
@@ -250,6 +252,7 @@ const averageDifficulty = useMemo(() => {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<ProtectedRoute>{mainApp}</ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><Reviews /></ProtectedRoute>} />
+      <Route path="/update-password" element={<UpdatePassword />} />
     </Routes>
   );
 }
