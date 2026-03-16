@@ -12,7 +12,6 @@ import Reviews from './pages/Reviews';
 import { supabase } from './supabaseClient.ts';
 import UpdatePassword from "./pages/UpdatePassword.tsx";
 
-
 const COURSE_COLORS = [
   "#1a5fa8","#1a7a45","#6b2d8b","#b35a0a","#0e6b5e",
   "#8a6d0b","#123d6e","#7a1f1f","#1a6e8a","#2d5a1a",
@@ -28,20 +27,6 @@ export default function App() {
     [semesterId, semesters]
   );
 
-  useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        // Check if this is an email confirmation (hash contains type=signup)
-        const hash = window.location.hash;
-        if (hash.includes("type=signup") || hash.includes("type=recovery")) {
-          supabase.auth.signOut();
-          window.location.replace("/login?confirmed=true");
-        }
-      }
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-  
   useEffect(() => {
     fetch('http://localhost:3001/api/terms')
       .then(res => res.json())
@@ -127,27 +112,64 @@ export default function App() {
     });
   }, []);
 
+  // ── Load schedules ──────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
     supabase
       .from('schedules')
-      .select('slot, courses')
+      .select('slot, courses, colors')
       .eq('user_id', userId)
       .then(({ data }) => {
         if (!data) return;
         const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
-        data.forEach((row: any) => { loaded[row.slot] = row.courses; });
+        const loadedColors = new Map<string, string>();
+        data.forEach((row: any) => {
+          loaded[row.slot] = row.courses;
+          if (row.colors) {
+            Object.entries(row.colors).forEach(([id, color]) => {
+              loadedColors.set(id, color as string);
+            });
+          }
+        });
         setSchedules(loaded);
+        setCustomColors(loadedColors);
       });
   }, [userId]);
 
-  const saveSlot = useCallback(async (slot: number, courses: Course[]) => {
+  // ── Load favorites ──────────────────────────────────────────────
+  useEffect(() => {
     if (!userId) return;
+    supabase
+      .from('favorites')
+      .select('course')
+      .eq('user_id', userId)
+      .then(({ data }) => {
+        if (!data) return;
+        setFavorites(data.map((row: any) => row.course));
+      });
+  }, [userId]);
+
+  const saveSlot = useCallback(async (slot: number, courses: Course[], colors?: Map<string, string>) => {
+    if (!userId) return;
+    const colorsObj = colors ? Object.fromEntries(colors) : Object.fromEntries(customColors);
     await supabase.from('schedules').upsert(
-      { user_id: userId, slot, courses, updated_at: new Date().toISOString() },
+      { user_id: userId, slot, courses, colors: colorsObj, updated_at: new Date().toISOString() },
       { onConflict: 'user_id,slot' }
     );
-  }, [userId]);
+  }, [userId, customColors]);
+
+  // ── Toggle favorite ─────────────────────────────────────────────
+  const toggleFavorite = useCallback(async (course: Course) => {
+    if (!userId) return;
+    const exists = favorites.some((c) => c.id === course.id);
+    if (exists) {
+      setFavorites((prev) => prev.filter((c) => c.id !== course.id));
+      await supabase.from('favorites').delete().eq('user_id', userId).eq('course_id', course.id);
+    } else {
+      setFavorites((prev) => [...prev, course]);
+      await supabase.from('favorites').insert({ user_id: userId, course_id: course.id, course });
+    }
+  }, [userId, favorites]);
 
   const scheduled = schedules[activeSlot] ?? [];
 
@@ -158,6 +180,11 @@ export default function App() {
     const newSchedules = { ...schedules, [activeSlot]: updated };
     setSchedules(newSchedules);
     saveSlot(activeSlot, updated);
+    // Auto-favorite when adding to schedule
+    if (!exists) {
+      const alreadyFav = favorites.some(f => f.id === course.id);
+      if (!alreadyFav) toggleFavorite(course);
+    }
   };
   // ───────────────────────────────────────────────────────────────
 
@@ -166,25 +193,25 @@ export default function App() {
   const totalCredits = useMemo(() => scheduled.reduce((acc, c) => acc + (c.credits ?? 0), 0), [scheduled]);
   const [courseDifficulties, setCourseDifficulties] = useState<Record<string, number>>({});
 
-useEffect(() => {
-  scheduled.forEach(c => {
-    const [dept, num] = c.code.split(' ');
-    if (courseDifficulties[c.code] !== undefined) return;
-    fetch(`http://localhost:3001/api/ratings/course/${dept}/${num}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.averages?.difficulty > 0) {
-          setCourseDifficulties(prev => ({ ...prev, [c.code]: parseFloat(data.averages.difficulty) }));
-        }
-      });
-  });
-}, [scheduled]);
+  useEffect(() => {
+    scheduled.forEach(c => {
+      const [dept, num] = c.code.split(' ');
+      if (courseDifficulties[c.code] !== undefined) return;
+      fetch(`http://localhost:3001/api/ratings/course/${dept}/${num}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.averages?.difficulty > 0) {
+            setCourseDifficulties(prev => ({ ...prev, [c.code]: parseFloat(data.averages.difficulty) }));
+          }
+        });
+    });
+  }, [scheduled]);
 
-const averageDifficulty = useMemo(() => {
-  const rated = scheduled.filter(c => courseDifficulties[c.code] !== undefined);
-  if (rated.length === 0) return null;
-  return rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) / rated.length;
-}, [scheduled, courseDifficulties]);
+  const averageDifficulty = useMemo(() => {
+    const rated = scheduled.filter(c => courseDifficulties[c.code] !== undefined);
+    if (rated.length === 0) return null;
+    return rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) / rated.length;
+  }, [scheduled, courseDifficulties]);
 
   const courseColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -195,17 +222,12 @@ const averageDifficulty = useMemo(() => {
   }, [scheduled, customColors]);
 
   const handleColorChange = (courseId: string, color: string) => {
-    setCustomColors(prev => new Map(prev).set(courseId, color));
+    const updated = new Map(customColors).set(courseId, color);
+    setCustomColors(updated);
+    saveSlot(activeSlot, scheduled, updated);
   };
 
   const displayedCourse = hoveredCourse ?? selectedCourse;
-
-  const toggleFavorite = (course: Course) => {
-    setFavorites((prev) => {
-      const exists = prev.some((c) => c.id === course.id);
-      return exists ? prev.filter((c) => c.id !== course.id) : [...prev, course];
-    });
-  };
 
   const selectCourse = (course: Course) => {
     setSelectedCourse(course);

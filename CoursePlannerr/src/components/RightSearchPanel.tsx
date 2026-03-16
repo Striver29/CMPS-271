@@ -69,7 +69,7 @@ export function RightSearchPanel({
   const scheduledIds = useMemo(() => new Set(scheduled.map((c) => c.id)), [scheduled]);
   const favoriteIds = useMemo(() => new Set(favorites.map((c) => c.id)), [favorites]);
 
-  const CourseItem = ({ c, showFavActive }: { c: Course; showFavActive?: boolean }) => {
+  const CourseItem = ({ c }: { c: Course }) => {
     const inSchedule = scheduledIds.has(c.id);
     const isFav = favoriteIds.has(c.id);
     return (
@@ -101,14 +101,13 @@ export function RightSearchPanel({
           </button>
 
           <button
-            className={`resultFav ${(showFavActive || isFav) ? 'isOn' : ''}`}
+            className={`resultFav ${isFav ? 'isOn' : ''}`}
             type="button"
             onClick={() => onToggleFavorite(c)}
             title={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >★</button>
         </div>
 
-        {/* Review buttons row */}
         <div style={{ display: 'flex', gap: '4px', padding: '3px 8px 5px 34px' }}>
           <button
             type="button"
@@ -191,12 +190,12 @@ export function RightSearchPanel({
         <hr className="divider" />
 
         <div className="resultsSection">
-          <div className="sectionTitle">Selected Courses</div>
-          {scheduled.length === 0 ? (
-            <div className="emptyState">No courses selected yet.</div>
+          <div className="sectionTitle">★ Favorites</div>
+          {favorites.length === 0 ? (
+            <div className="emptyState">No favorites yet. Click ★ on any course.</div>
           ) : (
             <ul className="resultList">
-              {scheduled.map((c) => <CourseItem key={c.id} c={c} />)}
+              {favorites.map((c) => <CourseItem key={c.id} c={c} />)}
             </ul>
           )}
         </div>
@@ -229,7 +228,6 @@ export function RightSearchPanel({
               }}>✕</button>
             </div>
 
-            {/* Avg stats */}
             {modalAvg && modalAvg.count > 0 && (
               <div style={{
                 display: 'flex', gap: '16px', marginBottom: '16px',
@@ -250,7 +248,6 @@ export function RightSearchPanel({
               </div>
             )}
 
-            {/* Reviews list */}
             {modalLoading ? (
               <div style={{ textAlign: 'center', color: '#aaa', padding: '20px' }}>Loading...</div>
             ) : modalRatings.length === 0 ? (
