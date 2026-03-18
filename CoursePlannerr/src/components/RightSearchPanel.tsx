@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Course } from "../types";
 import { supabase } from "../supabaseClient.ts";
 
-const API = "http://localhost:3001";
+const API = `${import.meta.env.VITE_API_URL}`;
 
 type Props = {
   allCourses: Course[];

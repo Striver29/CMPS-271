@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Course } from '../types';
 
-const API = 'http://localhost:3001';
+const API = `${import.meta.env.VITE_API_URL}`;
 
 type Message = { role: 'user' | 'assistant'; content: string; };
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient.ts';
 
-const API = 'http://localhost:3001';
+const API = `${import.meta.env.VITE_API_URL}`;
 type Tab = 'courses' | 'professors';
 
 interface CourseRating {

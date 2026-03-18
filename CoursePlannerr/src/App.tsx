@@ -41,7 +41,7 @@ export default function App() {
 
   // ✅ FIXED: added [] dependency array so this only runs once on mount
   useEffect(() => {
-    fetch("http://localhost:3001/api/terms")
+    fetch(`${import.meta.env.VITE_API_URL}/api/terms`)
       .then((res) => res.json())
       .then((data) => {
         const formatted = data.map(
@@ -61,7 +61,7 @@ export default function App() {
 
   useEffect(() => {
     if (!semesterId) return;
-    fetch(`http://localhost:3001/api/courses?term=${semesterId}`)
+    fetch(`${import.meta.env.VITE_API_URL}/api/courses?term=${semesterId}`)
       .then((res) => res.json())
       .then((data) => {
         const formatted: Course[] = data.map((c: any) => {
@@ -265,7 +265,7 @@ export default function App() {
     scheduled.forEach((c) => {
       const [dept, num] = c.code.split(" ");
       if (courseDifficulties[c.code] !== undefined) return;
-      fetch(`http://localhost:3001/api/ratings/course/${dept}/${num}`)
+      fetch(`${import.meta.env.VITE_API_URL}/api/ratings/course/${dept}/${num}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.averages?.difficulty > 0) {
