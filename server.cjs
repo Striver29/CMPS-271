@@ -379,7 +379,7 @@ const Groq = require("groq-sdk");
 const app = express();
 
 app.use(cors({
-  origin: '*'
+  origin:  ["http://localhost:5173", "http://localhost:3000", "https://cmps-271.vercel.app"]
 }));
 
 app.use(express.json());
