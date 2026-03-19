@@ -30,18 +30,16 @@ const COURSE_COLORS = [
 export default function App() {
   const appName = "AUB Course Planner";
 
-  const [semesters, setSemesters] = useState<{ id: string; label: string }[]>(
-    [],
-  );
+  const [semesters, setSemesters] = useState<{ id: string; label: string }[]>([]);
   const [semesterId, setSemesterId] = useState("");
   const semesterLabel = useMemo(
     () => semesters.find((s) => s.id === semesterId)?.label ?? "Semester",
     [semesterId, semesters],
   );
 
-  // ✅ FIXED: added [] dependency array so this only runs once on mount
+  // Fetch terms once on mount
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/terms`)
+    fetch("http://localhost:3001/api/terms")
       .then((res) => res.json())
       .then((data) => {
         const formatted = data.map(
@@ -55,13 +53,15 @@ export default function App() {
         if (current) setSemesterId(current.code);
       })
       .catch(() => setSemesters([]));
-  }, []); // <-- fix was here
+  }, []);
 
   const [allCourses, setAllCourses] = useState<Course[]>([]);
 
+  // Fetch courses whenever semester changes
   useEffect(() => {
     if (!semesterId) return;
-    fetch(`${import.meta.env.VITE_API_URL}/api/courses?term=${semesterId}`)
+    setAllCourses([]); // clear stale courses while loading
+    fetch(`http://localhost:3001/api/courses?term=${semesterId}`)
       .then((res) => res.json())
       .then((data) => {
         const formatted: Course[] = data.map((c: any) => {
@@ -108,10 +108,7 @@ export default function App() {
             campus: c.campus ?? "Main Campus",
             section: c.schedule?.section ?? "",
             credits: c.credits ?? c.creditHourHigh ?? c.creditHourLow ?? 0,
-            capacity: {
-              enrolled: c.enrolled_count ?? 0,
-              limit: c.capacity ?? 0,
-            },
+            capacity: { enrolled: c.enrolled_count ?? 0, limit: c.capacity ?? 0 },
             attributes: c.attributes ?? [],
             prerequisites: c.prerequisites ?? undefined,
             restrictions: c.restrictions ?? undefined,
@@ -125,23 +122,15 @@ export default function App() {
       .catch(() => setAllCourses([]));
   }, [semesterId]);
 
-  const [activeLeftTab, setActiveLeftTab] = useState<
-    "welcome" | "info" | "crn"
-  >("info");
+  const [activeLeftTab, setActiveLeftTab] = useState<"welcome" | "info" | "crn">("info");
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [hoveredCourse, setHoveredCourse] = useState<Course | null>(null);
   const [favorites, setFavorites] = useState<Course[]>([]);
-  const [customColors, setCustomColors] = useState<Map<string, string>>(
-    new Map(),
-  );
+  const [customColors, setCustomColors] = useState<Map<string, string>>(new Map());
 
   // ── Schedule slots ──────────────────────────────────────────────
   const [activeSlot, setActiveSlot] = useState(1);
-  const [schedules, setSchedules] = useState<Record<number, Course[]>>({
-    1: [],
-    2: [],
-    3: [],
-  });
+  const [schedules, setSchedules] = useState<Record<number, Course[]>>({ 1: [], 2: [], 3: [] });
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -150,18 +139,18 @@ export default function App() {
     });
   }, []);
 
-  // ── Load schedules ──────────────────────────────────────────────
+  // ── Load schedules — scoped to current term ──────────────────────
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !semesterId) return;
     supabase
       .from("schedules")
       .select("slot, courses, colors")
       .eq("user_id", userId)
+      .eq("term_id", semesterId) // ✅ filter by term
       .then(({ data }) => {
-        if (!data) return;
         const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
         const loadedColors = new Map<string, string>();
-        data.forEach((row: any) => {
+        (data ?? []).forEach((row: any) => {
           loaded[row.slot] = row.courses;
           if (row.colors) {
             Object.entries(row.colors).forEach(([id, color]) => {
@@ -172,7 +161,7 @@ export default function App() {
         setSchedules(loaded);
         setCustomColors(loadedColors);
       });
-  }, [userId]);
+  }, [userId, semesterId]); // ✅ re-run when term changes
 
   // ── Load favorites ──────────────────────────────────────────────
   useEffect(() => {
@@ -189,22 +178,23 @@ export default function App() {
 
   const saveSlot = useCallback(
     async (slot: number, courses: Course[], colors?: Map<string, string>) => {
-      if (!userId) return;
+      if (!userId || !semesterId) return;
       const colorsObj = colors
         ? Object.fromEntries(colors)
         : Object.fromEntries(customColors);
       await supabase.from("schedules").upsert(
         {
           user_id: userId,
+          term_id: semesterId, // ✅ include term_id in upsert
           slot,
           courses,
           colors: colorsObj,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,slot" },
+        { onConflict: "user_id,slot,term_id" }, // ✅ updated conflict key
       );
     },
-    [userId, customColors],
+    [userId, semesterId, customColors],
   );
 
   // ── Toggle favorite ─────────────────────────────────────────────
@@ -240,13 +230,11 @@ export default function App() {
     const newSchedules = { ...schedules, [activeSlot]: updated };
     setSchedules(newSchedules);
     saveSlot(activeSlot, updated);
-    // Auto-favorite when adding to schedule
     if (!exists) {
       const alreadyFav = favorites.some((f) => f.id === course.id);
       if (!alreadyFav) toggleFavorite(course);
     }
   };
-  // ───────────────────────────────────────────────────────────────
 
   const scheduledIds = useMemo(
     () => new Set(scheduled.map((c) => c.id)),
@@ -257,15 +245,13 @@ export default function App() {
     () => scheduled.reduce((acc, c) => acc + (c.credits ?? 0), 0),
     [scheduled],
   );
-  const [courseDifficulties, setCourseDifficulties] = useState<
-    Record<string, number>
-  >({});
+  const [courseDifficulties, setCourseDifficulties] = useState<Record<string, number>>({});
 
   useEffect(() => {
     scheduled.forEach((c) => {
       const [dept, num] = c.code.split(" ");
       if (courseDifficulties[c.code] !== undefined) return;
-      fetch(`${import.meta.env.VITE_API_URL}/api/ratings/course/${dept}/${num}`)
+      fetch(`http://localhost:3001/api/ratings/course/${dept}/${num}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.averages?.difficulty > 0) {
@@ -279,23 +265,15 @@ export default function App() {
   }, [scheduled]);
 
   const averageDifficulty = useMemo(() => {
-    const rated = scheduled.filter(
-      (c) => courseDifficulties[c.code] !== undefined,
-    );
+    const rated = scheduled.filter((c) => courseDifficulties[c.code] !== undefined);
     if (rated.length === 0) return null;
-    return (
-      rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) /
-      rated.length
-    );
+    return rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) / rated.length;
   }, [scheduled, courseDifficulties]);
 
   const courseColorMap = useMemo(() => {
     const map = new Map<string, string>();
     scheduled.forEach((c, i) => {
-      map.set(
-        c.id,
-        customColors.get(c.id) ?? COURSE_COLORS[i % COURSE_COLORS.length],
-      );
+      map.set(c.id, customColors.get(c.id) ?? COURSE_COLORS[i % COURSE_COLORS.length]);
     });
     return map;
   }, [scheduled, customColors]);
@@ -322,7 +300,6 @@ export default function App() {
     const newSchedules = { ...schedules, [activeSlot]: courses };
     setSchedules(newSchedules);
     saveSlot(activeSlot, courses);
-    // Auto-favorite all AI-scheduled courses
     courses.forEach((c) => {
       const alreadyFav = favorites.some((f) => f.id === c.id);
       if (!alreadyFav) toggleFavorite(c);
