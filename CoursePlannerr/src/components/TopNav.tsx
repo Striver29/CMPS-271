@@ -47,7 +47,6 @@ export function TopNav({
 }: Props) {
   const navigate = useNavigate();
 
-  // ── GPA modal state ──────────────────────────────────────────────
   const [showGpa, setShowGpa] = useState(false);
   const [rows, setRows] = useState(
     scheduledCourses.length > 0
@@ -62,14 +61,12 @@ export function TopNav({
         ]
   );
 
-  // ── Grade Calculator modal state ─────────────────────────────────
   const [showGrade, setShowGrade] = useState(false);
   const [gradeRows, setGradeRows] = useState(defaultGradeRows());
   const [nextId, setNextId] = useState(5);
 
   const gradePoints = gradePointsMap;
 
-  // ── GPA logic ────────────────────────────────────────────────────
   const gpa = (() => {
     const mapped = rows
       .filter((r) => !isNaN(parseFloat(r.credits)) && parseFloat(r.credits) > 0)
@@ -78,9 +75,7 @@ export function TopNav({
         grade: r.grade,
         semester: "",
       }));
-
     if (mapped.length === 0) return null;
-
     try {
       return calculateGPA(mapped).toFixed(2);
     } catch {
@@ -145,7 +140,6 @@ export function TopNav({
     });
   };
 
-  // ── Grade Calculator logic ────────────────────────────────────────
   const updateGradeRow = (id: number, field: string, val: string) =>
     setGradeRows((p) => p.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
 
@@ -182,8 +176,7 @@ export function TopNav({
 
   if (filledRows.length > 0) {
     const weighted = filledRows.reduce(
-      (s, r) =>
-        s + parseFloat(r.score as string) * parseFloat(String(r.weight)),
+      (s, r) => s + parseFloat(r.score as string) * parseFloat(String(r.weight)),
       0
     );
     finalPct = weighted / usedWeight;
@@ -281,6 +274,18 @@ export function TopNav({
           border-radius:9px; padding:7px 9px; transition:border-color 0.15s;
         }
         .gpa-row:focus-within { border-color:rgba(163,38,56,0.45); }
+
+        .gc-row {
+          display:grid; grid-template-columns:1fr 80px 80px 26px;
+          gap:6px; align-items:center;
+          background:var(--bg);
+          border:1px solid var(--border);
+          border-radius:9px; padding:7px 9px;
+          transition:border-color 0.15s;
+          margin-bottom:5px;
+        }
+        .gc-row:focus-within { border-color:rgba(163,38,56,0.45); }
+
         .g-in {
           background:transparent; border:none;
           color:var(--text); font-size:12px; outline:none;
@@ -408,19 +413,13 @@ export function TopNav({
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              document
-                .querySelector(".middlePanel")
-                ?.scrollIntoView({ behavior: "smooth" });
+              document.querySelector(".middlePanel")?.scrollIntoView({ behavior: "smooth" });
             }}
           >
             Home
           </a>
 
-          <a
-            className="topNav__link"
-            style={{ cursor: "pointer" }}
-            onClick={() => navigate("/reviews")}
-          >
+          <a className="topNav__link" style={{ cursor: "pointer" }} onClick={() => navigate("/reviews")}>
             Reviews
           </a>
 
@@ -431,15 +430,8 @@ export function TopNav({
               e.preventDefault();
               setRows(
                 scheduledCourses.length > 0
-                  ? scheduledCourses.map((c) => ({
-                      course: c.code,
-                      grade: "A+",
-                      credits: String(c.credits),
-                    }))
-                  : [
-                      { course: "", grade: "A+", credits: "" },
-                      { course: "", grade: "A+", credits: "" },
-                    ]
+                  ? scheduledCourses.map((c) => ({ course: c.code, grade: "A+", credits: String(c.credits) }))
+                  : [{ course: "", grade: "A+", credits: "" }, { course: "", grade: "A+", credits: "" }]
               );
               setShowGpa(true);
             }}
@@ -461,9 +453,7 @@ export function TopNav({
         </nav>
 
         <div className="topNav__status" title={lastUpdatedText}>
-          <span className="topNav__statusText">
-            {semesterLabel} — {lastUpdatedText}
-          </span>
+          <span className="topNav__statusText">{semesterLabel} — {lastUpdatedText}</span>
         </div>
 
         <div className="topNav__controls">
@@ -475,18 +465,11 @@ export function TopNav({
             aria-label="Change semester"
           >
             {semesters.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
+              <option key={s.id} value={s.id}>{s.label}</option>
             ))}
           </select>
 
-          <button
-            className="topNav__logout"
-            type="button"
-            onClick={toggleTheme}
-            title="Toggle light/dark mode"
-          >
+          <button className="topNav__logout" type="button" onClick={toggleTheme} title="Toggle light/dark mode">
             {lightMode ? "🌙" : "☀️"}
           </button>
           <button
@@ -514,12 +497,7 @@ export function TopNav({
                   <div className="gpa-mhead-sub">American University of Beirut</div>
                 </div>
               </div>
-              <button
-                className="gpa-mhead-close"
-                onClick={() => setShowGpa(false)}
-              >
-                ✕
-              </button>
+              <button className="gpa-mhead-close" onClick={() => setShowGpa(false)}>✕</button>
             </div>
 
             <div className="gpa-body">
@@ -531,46 +509,20 @@ export function TopNav({
                   <span className="gpa-col-head c">Credits</span>
                   <span></span>
                 </div>
-
                 <div className="gpa-rows">
                   {rows.map((row, i) => (
                     <div key={i} className="gpa-row">
-                      <input
-                        type="text"
-                        className="g-in"
-                        placeholder={`Course ${i + 1}`}
-                        value={row.course}
-                        onChange={(e) => updateRow(i, "course", e.target.value)}
-                      />
-                      <select
-                        className="g-sel"
-                        value={row.grade}
-                        onChange={(e) => updateRow(i, "grade", e.target.value)}
-                      >
-                        {Object.keys(gradePoints).map((g) => (
-                          <option key={g}>{g}</option>
-                        ))}
+                      <input type="text" className="g-in" placeholder={`Course ${i + 1}`} value={row.course}
+                        onChange={(e) => updateRow(i, "course", e.target.value)} />
+                      <select className="g-sel" value={row.grade} onChange={(e) => updateRow(i, "grade", e.target.value)}>
+                        {Object.keys(gradePoints).map((g) => <option key={g}>{g}</option>)}
                       </select>
-                      <input
-                        type="number"
-                        className="g-num"
-                        placeholder="Cr"
-                        min="0"
-                        max="6"
-                        value={row.credits}
-                        onChange={(e) => updateRow(i, "credits", e.target.value)}
-                      />
-                      <button
-                        className="g-del"
-                        onClick={() => removeRow(i)}
-                        disabled={rows.length <= 1}
-                      >
-                        ✕
-                      </button>
+                      <input type="number" className="g-num" placeholder="Cr" min="0" max="6" value={row.credits}
+                        onChange={(e) => updateRow(i, "credits", e.target.value)} />
+                      <button className="g-del" onClick={() => removeRow(i)} disabled={rows.length <= 1}>✕</button>
                     </div>
                   ))}
                 </div>
-
                 <button className="gpa-add" onClick={addRow}>
                   <span style={{ fontSize: "15px" }}>+</span> Add Course
                 </button>
@@ -578,41 +530,20 @@ export function TopNav({
 
               <div className="gpa-right">
                 <div className="gpa-right-title">Live Summary</div>
-
                 <div className="gpa-card">
                   <div className="gpa-card-top">
                     <div className="gpa-card-label">Your GPA</div>
-                    <div
-                      className="gpa-card-number"
-                      style={{ color: gpaColor }}
-                    >
-                      {gpa ?? "—"}
-                    </div>
+                    <div className="gpa-card-number" style={{ color: gpaColor }}>{gpa ?? "—"}</div>
                     <div className="gpa-card-scale">out of 4.30</div>
                   </div>
                   <div className="gpa-card-bar">
-                    <div
-                      className="gpa-card-bar-fill"
-                      style={{ width: `${gpaPercent}%`, background: gpaColor }}
-                    />
+                    <div className="gpa-card-bar-fill" style={{ width: `${gpaPercent}%`, background: gpaColor }} />
                   </div>
-                  <div
-                    className="gpa-card-badge"
-                    style={{ background: `${gpaColor}18` }}
-                  >
-                    <div
-                      className="gpa-badge-dot"
-                      style={{ background: gpaColor }}
-                    />
-                    <span
-                      className="gpa-badge-text"
-                      style={{ color: gpaColor }}
-                    >
-                      {gpaLabel}
-                    </span>
+                  <div className="gpa-card-badge" style={{ background: `${gpaColor}18` }}>
+                    <div className="gpa-badge-dot" style={{ background: gpaColor }} />
+                    <span className="gpa-badge-text" style={{ color: gpaColor }}>{gpaLabel}</span>
                   </div>
                 </div>
-
                 <div className="gpa-stat-grid">
                   <div className="gpa-stat-row">
                     <span className="gpa-stat-lbl">Courses</span>
@@ -631,15 +562,8 @@ export function TopNav({
             </div>
 
             <div className="gpa-footer">
-              <button className="gpa-btn-reset" onClick={resetRows}>
-                Reset
-              </button>
-              <button
-                className="gpa-btn-done"
-                onClick={() => setShowGpa(false)}
-              >
-                Done
-              </button>
+              <button className="gpa-btn-reset" onClick={resetRows}>Reset</button>
+              <button className="gpa-btn-done" onClick={() => setShowGpa(false)}>Done</button>
             </div>
           </div>
         </div>
@@ -657,77 +581,35 @@ export function TopNav({
                   <div className="gpa-mhead-sub">American University of Beirut</div>
                 </div>
               </div>
-              <button
-                className="gpa-mhead-close"
-                onClick={() => setShowGrade(false)}
-              >
-                ✕
-              </button>
+              <button className="gpa-mhead-close" onClick={() => setShowGrade(false)}>✕</button>
             </div>
 
             <div className="gpa-body">
               <div className="gpa-left">
                 <div className="gpa-left-title">Components</div>
-                <div className="gpa-col-heads">
+                <div className="gpa-col-heads" style={{ gridTemplateColumns: "1fr 80px 80px 26px" }}>
                   <span className="gpa-col-head">Name</span>
                   <span className="gpa-col-head c">Weight %</span>
                   <span className="gpa-col-head c">Score %</span>
                   <span></span>
                 </div>
-
                 <div className="gpa-rows">
                   {gradeRows.map((r) => (
                     <div key={r.id} className="gc-row">
-                      <input
-                        type="text"
-                        className="g-in"
-                        placeholder="e.g. Midterm"
-                        value={r.name}
-                        onChange={(e) =>
-                          updateGradeRow(r.id, "name", e.target.value)
-                        }
-                      />
-                      <input
-                        type="number"
-                        className="g-num"
-                        placeholder="%"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={r.weight}
-                        onChange={(e) =>
-                          updateGradeRow(r.id, "weight", e.target.value)
-                        }
-                      />
-                      <input
-                        type="number"
-                        className="g-num"
-                        placeholder="%"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={r.score}
-                        onChange={(e) =>
-                          updateGradeRow(r.id, "score", e.target.value)
-                        }
-                      />
-                      <button
-                        className="g-del"
-                        onClick={() => removeGradeRow(r.id)}
-                        disabled={gradeRows.length <= 1}
-                      >
-                        ✕
-                      </button>
+                      <input type="text" className="g-in" placeholder="e.g. Midterm" value={r.name}
+                        onChange={(e) => updateGradeRow(r.id, "name", e.target.value)} />
+                      <input type="number" className="g-num" placeholder="%" min={0} max={100} step={1} value={r.weight}
+                        onChange={(e) => updateGradeRow(r.id, "weight", e.target.value)} />
+                      <input type="number" className="g-num" placeholder="%" min={0} max={100} step={0.1} value={r.score}
+                        onChange={(e) => updateGradeRow(r.id, "score", e.target.value)} />
+                      <button className="g-del" onClick={() => removeGradeRow(r.id)} disabled={gradeRows.length <= 1}>✕</button>
                     </div>
                   ))}
                 </div>
 
-                {Math.abs(totalWeight - 100) > 0.01 &&
-                  gradeRows.some((r) => r.weight !== 0) && (
-                    <div className="gc-warn">
-                      Weights sum to {totalWeight.toFixed(1)}% — must equal 100%
-                    </div>
-                  )}
+                {Math.abs(totalWeight - 100) > 0.01 && gradeRows.some((r) => r.weight !== 0) && (
+                  <div className="gc-warn">Weights sum to {totalWeight.toFixed(1)}% — must equal 100%</div>
+                )}
 
                 <button className="gpa-add" onClick={addGradeRow}>
                   <span style={{ fontSize: "15px" }}>+</span> Add Component
@@ -741,26 +623,15 @@ export function TopNav({
                   <div className="gc-result">
                     <div>
                       <div className="gc-result-lbl">Final grade</div>
-                      <div className="gc-result-pct">
-                        {isPartial ? "~" : ""}
-                        {finalPct.toFixed(1)}%
-                      </div>
-                      <div className="gc-result-gp">
-                        GPA pts: {finalGp!.toFixed(1)}
-                        {isPartial ? " (partial)" : ""}
-                      </div>
+                      <div className="gc-result-pct">{isPartial ? "~" : ""}{finalPct.toFixed(1)}%</div>
+                      <div className="gc-result-gp">GPA pts: {finalGp!.toFixed(1)}{isPartial ? " (partial)" : ""}</div>
                     </div>
                     <div className="gc-result-letter">{finalLetter}</div>
                   </div>
                 ) : (
                   <div className="gpa-card" style={{ padding: "14px" }}>
                     <div className="gpa-card-label">Final grade</div>
-                    <div
-                      className="gpa-card-number"
-                      style={{ color: "#334155", fontSize: "40px" }}
-                    >
-                      —
-                    </div>
+                    <div className="gpa-card-number" style={{ color: "#334155", fontSize: "40px" }}>—</div>
                     <div className="gpa-card-scale">Enter scores to calculate</div>
                   </div>
                 )}
@@ -772,41 +643,21 @@ export function TopNav({
                   </div>
                   <div className="gpa-stat-row">
                     <span className="gpa-stat-lbl">Weight used</span>
-                    <span
-                      className="gpa-stat-val"
-                      style={{
-                        color:
-                          Math.abs(totalWeight - 100) > 0.01
-                            ? "#ef4444"
-                            : "#94a3b8",
-                      }}
-                    >
+                    <span className="gpa-stat-val" style={{ color: Math.abs(totalWeight - 100) > 0.01 ? "#ef4444" : "#94a3b8" }}>
                       {totalWeight.toFixed(0)}%
                     </span>
                   </div>
                   <div className="gpa-stat-row">
                     <span className="gpa-stat-lbl">Letter grade</span>
-                    <span className="gpa-stat-val" style={{ color: letterColor }}>
-                      {finalLetter ?? "—"}
-                    </span>
+                    <span className="gpa-stat-val" style={{ color: letterColor }}>{finalLetter ?? "—"}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="gpa-footer">
-              <button
-                className="gpa-btn-reset"
-                onClick={() => setGradeRows(defaultGradeRows())}
-              >
-                Reset
-              </button>
-              <button
-                className="gpa-btn-done"
-                onClick={() => setShowGrade(false)}
-              >
-                Done
-              </button>
+              <button className="gpa-btn-reset" onClick={() => setGradeRows(defaultGradeRows())}>Reset</button>
+              <button className="gpa-btn-done" onClick={() => setShowGrade(false)}>Done</button>
             </div>
           </div>
         </div>
