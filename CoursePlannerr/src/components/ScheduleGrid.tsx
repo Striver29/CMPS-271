@@ -547,11 +547,17 @@ export function ScheduleGrid({
 
       <div className="schGrid" ref={gridRef} style={{ height: gridHeight }}>
         <div className="schTimes">
-          {hourMarks.map((m) => (
-            <div key={m.label} className="schTimes__mark" style={{ top: m.at }}>
-              {m.label}
-            </div>
-          ))}
+          {/* FIX: prefixed key with "time-" to avoid collision with "hline-" keys below */}
+          {hourMarks.map((m, index) => (
+  <div
+    key={`time-${m.label}-${index}`}
+    className="schTimes__mark"
+    style={{ top: m.at }}
+  >
+    {m.label}
+  </div>
+))}
+
         </div>
 
         <div className="schCanvas" style={{ height: gridHeight }}>

@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const BASE_URL = 'https://sturegss.aub.edu.lb/StudentRegistrationSsb';
 const PAGE_SIZE = 500;
-const TERM_CODE = '202620'; // Spring 2025-2026
+const TERM_CODE = '2026'; // Spring 2025-2026
 
 // ─── Supabase client ───────────────────────────────────────────────────────────
 const supabase = createClient(

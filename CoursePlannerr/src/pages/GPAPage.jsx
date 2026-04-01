@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import CourseForm from "../components/CourseForm";
 import GPA from "./GPA";
 import GPACourses from "./GPACourses";
+import GradeCalculator from "../components/GradeCalculator";
+
 
 export default function GPAPage() {
   const [courses, setCourses] = useState([
@@ -20,6 +22,7 @@ export default function GPAPage() {
       <GPA courses={courses} />
       <br />
       <GPACourses courses={courses} setCourses={setCourses} />
+      <GradeCalculator />
     </div>
   );
 }

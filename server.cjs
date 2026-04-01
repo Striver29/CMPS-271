@@ -367,6 +367,18 @@
 // process.stdin.resume();
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 console.log("File started");
 const express = require("express");
 const cors = require("cors");
@@ -520,12 +532,24 @@ app.post("/api/ratings/professor", async (req, res) => {
 app.get("/api/professors", async (req, res) => {
   const { search } = req.query;
 
-  let query = supabase
-    .from("professors")
-    .select("id, full_name");
+  let query = supabase.from("professors").select("id, full_name");
 
   if (search) {
-    query = query.ilike("full_name", `%${search}%`);
+    const parts = search.trim().split(/\s+/);
+
+    if (parts.length >= 2) {
+      // Generate all possible "Last, First" combinations
+      // e.g. "mohamad talal farran" → try "talal farran, mohamad" and "farran, mohamad talal"
+      const filters = [`full_name.ilike.%${search}%`];
+      for (let i = 1; i < parts.length; i++) {
+        const first = parts.slice(0, i).join(' ');
+        const last = parts.slice(i).join(' ');
+        filters.push(`full_name.ilike.%${last}, ${first}%`);
+      }
+      query = query.or(filters.join(','));
+    } else {
+      query = query.ilike("full_name", `%${search}%`);
+    }
   }
 
   const { data, error } = await query.limit(20);
@@ -600,7 +624,10 @@ If the student is just chatting (not asking for a schedule), respond in this for
   try {
     const chatMessages = [
       { role: 'system', content: systemPrompt },
-      ...(history || []).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+      ...(history || []).map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+      })),
       { role: 'user', content: userMessage }
     ];
 

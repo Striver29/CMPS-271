@@ -13,6 +13,7 @@ import { supabase } from "./supabaseClient.ts";
 import UpdatePassword from "./pages/UpdatePassword.tsx";
 import { AIScheduler } from "./components/AiScheduler.tsx";
 import GPAPage from "./pages/GPAPage";
+import GradeCalculator from "./components/GradeCalculator";
 
 const COURSE_COLORS = [
   "#1a5fa8",
@@ -39,7 +40,6 @@ export default function App() {
     [semesterId, semesters],
   );
 
-  // Fetch terms once on mount
   useEffect(() => {
     fetch("http://localhost:3001/api/terms")
       .then((res) => res.json())
@@ -59,10 +59,9 @@ export default function App() {
 
   const [allCourses, setAllCourses] = useState<Course[]>([]);
 
-  // Fetch courses whenever semester changes
   useEffect(() => {
     if (!semesterId) return;
-    setAllCourses([]); // clear stale courses while loading
+    setAllCourses([]);
     fetch(`http://localhost:3001/api/courses?term=${semesterId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -137,7 +136,6 @@ export default function App() {
     new Map(),
   );
 
-  // ── Schedule slots ──────────────────────────────────────────────
   const [activeSlot, setActiveSlot] = useState(1);
   const [schedules, setSchedules] = useState<Record<number, Course[]>>({
     1: [],
@@ -152,14 +150,13 @@ export default function App() {
     });
   }, []);
 
-  // ── Load schedules — scoped to current term ──────────────────────
   useEffect(() => {
     if (!userId || !semesterId) return;
     supabase
       .from("schedules")
       .select("slot, courses, colors")
       .eq("user_id", userId)
-      .eq("term_id", semesterId) // ✅ filter by term
+      .eq("term_id", semesterId)
       .then(({ data }) => {
         const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
         const loadedColors = new Map<string, string>();
@@ -174,9 +171,8 @@ export default function App() {
         setSchedules(loaded);
         setCustomColors(loadedColors);
       });
-  }, [userId, semesterId]); // ✅ re-run when term changes
+  }, [userId, semesterId]);
 
-  // ── Load favorites ──────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
     supabase
@@ -198,19 +194,18 @@ export default function App() {
       await supabase.from("schedules").upsert(
         {
           user_id: userId,
-          term_id: semesterId, // ✅ include term_id in upsert
+          term_id: semesterId,
           slot,
           courses,
           colors: colorsObj,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,slot,term_id" }, // ✅ updated conflict key
+        { onConflict: "user_id,slot,term_id" },
       );
     },
     [userId, semesterId, customColors],
   );
 
-  // ── Toggle favorite ─────────────────────────────────────────────
   const toggleFavorite = useCallback(
     async (course: Course) => {
       if (!userId) return;
@@ -393,6 +388,7 @@ export default function App() {
       />
       <Route path="/update-password" element={<UpdatePassword />} />
       <Route path="/gpa" element={<GPAPage />} />
+      <Route path="/grade-calculator" element={<GradeCalculator />} />
     </Routes>
   );
 }
