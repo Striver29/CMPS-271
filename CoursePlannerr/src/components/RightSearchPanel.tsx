@@ -94,6 +94,7 @@ export function RightSearchPanel({
       .from("syllabi")
       .select("*")
       .eq("course_code", viewModal.course.code)
+      .eq("status", "approved")
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         setSyllabi(data || []);
@@ -147,12 +148,6 @@ export function RightSearchPanel({
       setUploadError("Could not save syllabus info.");
     } else {
       setUploadSuccess(true);
-      const { data } = await supabase
-        .from("syllabi")
-        .select("*")
-        .eq("course_code", viewModal.course.code)
-        .order("created_at", { ascending: false });
-      setSyllabi(data || []);
     }
     setUploading(false);
   };
@@ -699,15 +694,16 @@ export function RightSearchPanel({
                         ⚠ {uploadError}
                       </div>
                     )}
+
                     {uploadSuccess && (
                       <div
                         style={{
                           marginTop: "8px",
                           fontSize: "12px",
-                          color: "#22c55e",
+                          color: "#f59e0b",
                         }}
                       >
-                        ✓ Syllabus uploaded successfully!
+                        ⏳ Uploaded! Your syllabus is pending admin review.
                       </div>
                     )}
                   </div>

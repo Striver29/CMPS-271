@@ -14,6 +14,8 @@ import UpdatePassword from "./pages/UpdatePassword.tsx";
 import { AIScheduler } from "./components/AiScheduler.tsx";
 import GPAPage from "./pages/GPAPage";
 import GradeCalculator from "./components/GradeCalculator";
+import AdminPortal from "./pages/AdminPortal";
+import AdminRoute from "./components/AdminRoute";
 
 const COURSE_COLORS = [
   "#1a5fa8",
@@ -389,6 +391,14 @@ export default function App() {
       <Route path="/update-password" element={<UpdatePassword />} />
       <Route path="/gpa" element={<GPAPage />} />
       <Route path="/grade-calculator" element={<GradeCalculator />} />
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminPortal />
+          </AdminRoute>
+        }
+      />
     </Routes>
   );
 }
