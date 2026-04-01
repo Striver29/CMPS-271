@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Course } from "../types";
 import { supabase } from "../supabaseClient.ts";
 
-const API = `${import.meta.env.VITE_API_URL}`;
+const API = "http://localhost:3001";
 
 type Props = {
   allCourses: Course[];
@@ -64,14 +64,12 @@ export function RightSearchPanel({
   } | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
-  // Syllabus state
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [syllabusLoading, setSyllabusLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // Load ratings when modal opens
   useEffect(() => {
     if (!viewModal) return;
     setModalLoading(true);
@@ -89,7 +87,6 @@ export function RightSearchPanel({
       .finally(() => setModalLoading(false));
   }, [viewModal]);
 
-  // Load syllabi when syllabus tab is opened
   useEffect(() => {
     if (modalTab !== "syllabus" || !viewModal) return;
     setSyllabusLoading(true);
@@ -109,7 +106,6 @@ export function RightSearchPanel({
   ) => {
     const file = e.target.files?.[0];
     if (!file || !viewModal) return;
-
     if (file.type !== "application/pdf") {
       setUploadError("Only PDF files are allowed.");
       return;
@@ -131,9 +127,8 @@ export function RightSearchPanel({
     const { error: storageError } = await supabase.storage
       .from("syllabi")
       .upload(fileName, file, { contentType: "application/pdf" });
-
     if (storageError) {
-      setUploadError("Upload failed. Make sure the storage bucket exists.");
+      setUploadError("Upload failed. Make sure you are logged in.");
       setUploading(false);
       return;
     }
@@ -141,7 +136,6 @@ export function RightSearchPanel({
     const { data: urlData } = supabase.storage
       .from("syllabi")
       .getPublicUrl(fileName);
-
     const { error: dbError } = await supabase.from("syllabi").insert({
       course_code: viewModal.course.code,
       file_url: urlData.publicUrl,
@@ -153,7 +147,6 @@ export function RightSearchPanel({
       setUploadError("Could not save syllabus info.");
     } else {
       setUploadSuccess(true);
-      // Refresh list
       const { data } = await supabase
         .from("syllabi")
         .select("*")
@@ -185,6 +178,30 @@ export function RightSearchPanel({
     () => new Set(favorites.map((c) => c.id)),
     [favorites],
   );
+
+  const modalStyle = {
+    overlay: {
+      position: "fixed" as const,
+      inset: 0,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 99999,
+    },
+    box: {
+      backgroundColor: "var(--panel)",
+      border: "1px solid var(--border)",
+      borderRadius: "12px",
+      minWidth: "340px",
+      maxWidth: "500px",
+      width: "90%",
+      maxHeight: "82vh",
+      display: "flex",
+      flexDirection: "column" as const,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+    },
+  };
 
   const CourseItem = ({ c }: { c: Course }) => {
     const inSchedule = scheduledIds.has(c.id);
@@ -237,9 +254,9 @@ export function RightSearchPanel({
               fontSize: "10px",
               padding: "2px 8px",
               borderRadius: "4px",
-              border: "1px solid #555",
+              border: "1px solid var(--border)",
               backgroundColor: "transparent",
-              color: "#aaa",
+              color: "var(--muted)",
               cursor: "pointer",
             }}
           >
@@ -254,9 +271,9 @@ export function RightSearchPanel({
               fontSize: "10px",
               padding: "2px 8px",
               borderRadius: "4px",
-              border: "1px solid #555",
+              border: "1px solid var(--border)",
               backgroundColor: "transparent",
-              color: "#aaa",
+              color: "var(--muted)",
               cursor: "pointer",
             }}
           >
@@ -342,36 +359,10 @@ export function RightSearchPanel({
         </div>
       </div>
 
-      {/* ── Modal ── */}
       {viewModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 99999,
-          }}
-          onClick={() => setViewModal(null)}
-        >
-          <div
-            style={{
-              backgroundColor: "#1e1e2e",
-              border: "1px solid #444",
-              borderRadius: "12px",
-              minWidth: "340px",
-              maxWidth: "500px",
-              width: "90%",
-              maxHeight: "82vh",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
+        <div style={modalStyle.overlay} onClick={() => setViewModal(null)}>
+          <div style={modalStyle.box} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
             <div style={{ padding: "18px 20px 0", flexShrink: 0 }}>
               <div
                 style={{
@@ -386,7 +377,7 @@ export function RightSearchPanel({
                     style={{
                       fontWeight: "bold",
                       fontSize: "15px",
-                      color: "#fff",
+                      color: "var(--text)",
                     }}
                   >
                     {viewModal.course.code}
@@ -394,7 +385,7 @@ export function RightSearchPanel({
                   <div
                     style={{
                       fontSize: "12px",
-                      color: "#aaa",
+                      color: "var(--muted)",
                       marginTop: "2px",
                     }}
                   >
@@ -407,7 +398,7 @@ export function RightSearchPanel({
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#aaa",
+                    color: "var(--muted)",
                     fontSize: "18px",
                     cursor: "pointer",
                   }}
@@ -421,8 +412,7 @@ export function RightSearchPanel({
                 style={{
                   display: "flex",
                   gap: "4px",
-                  borderBottom: "1px solid #333",
-                  marginBottom: "0",
+                  borderBottom: "1px solid var(--border)",
                 }}
               >
                 {(["reviews", "syllabus"] as ModalTab[]).map((tab) => (
@@ -437,7 +427,7 @@ export function RightSearchPanel({
                       background: "none",
                       border: "none",
                       cursor: "pointer",
-                      color: modalTab === tab ? "#fff" : "#666",
+                      color: modalTab === tab ? "var(--text)" : "var(--muted)",
                       borderBottom:
                         modalTab === tab
                           ? "2px solid #A32638"
@@ -455,7 +445,7 @@ export function RightSearchPanel({
 
             {/* Tab Content */}
             <div style={{ overflowY: "auto", padding: "16px 20px", flex: 1 }}>
-              {/* ── REVIEWS TAB ── */}
+              {/* REVIEWS TAB */}
               {modalTab === "reviews" && (
                 <>
                   {modalAvg && modalAvg.count > 0 && (
@@ -465,59 +455,40 @@ export function RightSearchPanel({
                         gap: "16px",
                         marginBottom: "16px",
                         padding: "12px",
-                        backgroundColor: "#12122a",
+                        backgroundColor: "var(--bg)",
                         borderRadius: "8px",
+                        border: "1px solid var(--border)",
                       }}
                     >
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: "28px",
-                            fontWeight: "bold",
-                            color: "#fff",
-                          }}
-                        >
-                          {modalAvg.rating}
+                      {[
+                        { val: modalAvg.rating, label: "Rating" },
+                        { val: modalAvg.difficulty, label: "Difficulty" },
+                        { val: modalAvg.count, label: "Reviews" },
+                      ].map(({ val, label }) => (
+                        <div key={label} style={{ textAlign: "center" }}>
+                          <div
+                            style={{
+                              fontSize: "28px",
+                              fontWeight: "bold",
+                              color: "var(--text)",
+                            }}
+                          >
+                            {val}
+                          </div>
+                          <div
+                            style={{ fontSize: "11px", color: "var(--muted)" }}
+                          >
+                            {label}
+                          </div>
                         </div>
-                        <div style={{ fontSize: "11px", color: "#aaa" }}>
-                          Rating
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: "28px",
-                            fontWeight: "bold",
-                            color: "#fff",
-                          }}
-                        >
-                          {modalAvg.difficulty}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#aaa" }}>
-                          Difficulty
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: "28px",
-                            fontWeight: "bold",
-                            color: "#fff",
-                          }}
-                        >
-                          {modalAvg.count}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#aaa" }}>
-                          Reviews
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   )}
                   {modalLoading ? (
                     <div
                       style={{
                         textAlign: "center",
-                        color: "#aaa",
+                        color: "var(--muted)",
                         padding: "20px",
                       }}
                     >
@@ -527,7 +498,7 @@ export function RightSearchPanel({
                     <div
                       style={{
                         textAlign: "center",
-                        color: "#666",
+                        color: "var(--muted)",
                         padding: "20px",
                       }}
                     >
@@ -566,9 +537,10 @@ export function RightSearchPanel({
                         <div
                           key={r.id}
                           style={{
-                            backgroundColor: "#12122a",
+                            backgroundColor: "var(--bg)",
                             borderRadius: "8px",
                             padding: "12px",
+                            border: "1px solid var(--border)",
                           }}
                         >
                           <div
@@ -597,7 +569,10 @@ export function RightSearchPanel({
                             </span>
                             {r.difficulty > 0 && (
                               <span
-                                style={{ fontSize: "12px", color: "#6b7280" }}
+                                style={{
+                                  fontSize: "12px",
+                                  color: "var(--muted)",
+                                }}
                               >
                                 Difficulty: {r.difficulty}/5
                               </span>
@@ -605,7 +580,7 @@ export function RightSearchPanel({
                             <span
                               style={{
                                 fontSize: "11px",
-                                color: "#4b5563",
+                                color: "var(--muted)",
                                 marginLeft: "auto",
                               }}
                             >
@@ -617,7 +592,7 @@ export function RightSearchPanel({
                               style={{
                                 margin: 0,
                                 fontSize: "13px",
-                                color: "#d1d5db",
+                                color: "var(--text)",
                                 lineHeight: 1.6,
                               }}
                             >
@@ -654,24 +629,23 @@ export function RightSearchPanel({
                 </>
               )}
 
-              {/* ── SYLLABUS TAB ── */}
+              {/* SYLLABUS TAB */}
               {modalTab === "syllabus" && (
                 <div>
-                  {/* Upload Section */}
                   <div
                     style={{
-                      backgroundColor: "#12122a",
+                      backgroundColor: "var(--bg)",
                       borderRadius: "10px",
                       padding: "16px",
                       marginBottom: "16px",
-                      border: "1px dashed #333",
+                      border: "1px dashed var(--border)",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
                         fontWeight: 600,
-                        color: "#e2e8f0",
+                        color: "var(--text)",
                         marginBottom: "6px",
                       }}
                     >
@@ -680,7 +654,7 @@ export function RightSearchPanel({
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "#64748b",
+                        color: "var(--muted)",
                         marginBottom: "12px",
                       }}
                     >
@@ -695,7 +669,9 @@ export function RightSearchPanel({
                         padding: "10px",
                         borderRadius: "8px",
                         cursor: "pointer",
-                        backgroundColor: uploading ? "#1e1e3a" : "#A32638",
+                        backgroundColor: uploading
+                          ? "var(--border)"
+                          : "#A32638",
                         color: "#fff",
                         fontSize: "13px",
                         fontWeight: 600,
@@ -736,12 +712,11 @@ export function RightSearchPanel({
                     )}
                   </div>
 
-                  {/* Syllabus List */}
                   <div
                     style={{
                       fontSize: "12px",
                       fontWeight: 700,
-                      color: "#475569",
+                      color: "var(--muted)",
                       textTransform: "uppercase",
                       letterSpacing: "0.6px",
                       marginBottom: "10px",
@@ -754,7 +729,7 @@ export function RightSearchPanel({
                     <div
                       style={{
                         textAlign: "center",
-                        color: "#aaa",
+                        color: "var(--muted)",
                         padding: "20px",
                       }}
                     >
@@ -764,7 +739,7 @@ export function RightSearchPanel({
                     <div
                       style={{
                         textAlign: "center",
-                        color: "#475569",
+                        color: "var(--muted)",
                         padding: "24px 0",
                         fontSize: "13px",
                       }}
@@ -787,20 +762,21 @@ export function RightSearchPanel({
                         <div
                           key={s.id}
                           style={{
-                            backgroundColor: "#12122a",
+                            backgroundColor: "var(--bg)",
                             borderRadius: "8px",
                             padding: "12px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
                             gap: "10px",
+                            border: "1px solid var(--border)",
                           }}
                         >
                           <div style={{ minWidth: 0 }}>
                             <div
                               style={{
                                 fontSize: "13px",
-                                color: "#e2e8f0",
+                                color: "var(--text)",
                                 fontWeight: 500,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -812,7 +788,7 @@ export function RightSearchPanel({
                             <div
                               style={{
                                 fontSize: "11px",
-                                color: "#475569",
+                                color: "var(--muted)",
                                 marginTop: "3px",
                               }}
                             >
@@ -826,8 +802,8 @@ export function RightSearchPanel({
                             rel="noopener noreferrer"
                             style={{
                               padding: "5px 12px",
-                              backgroundColor: "#1e3a5f",
-                              color: "#60a5fa",
+                              backgroundColor: "var(--accent)",
+                              color: "#fff",
                               borderRadius: "6px",
                               fontSize: "12px",
                               fontWeight: 600,
@@ -851,5 +827,3 @@ export function RightSearchPanel({
     </aside>
   );
 }
-
-

@@ -30,7 +30,9 @@ const COURSE_COLORS = [
 export default function App() {
   const appName = "AUB Course Planner";
 
-  const [semesters, setSemesters] = useState<{ id: string; label: string }[]>([]);
+  const [semesters, setSemesters] = useState<{ id: string; label: string }[]>(
+    [],
+  );
   const [semesterId, setSemesterId] = useState("");
   const semesterLabel = useMemo(
     () => semesters.find((s) => s.id === semesterId)?.label ?? "Semester",
@@ -108,7 +110,10 @@ export default function App() {
             campus: c.campus ?? "Main Campus",
             section: c.schedule?.section ?? "",
             credits: c.credits ?? c.creditHourHigh ?? c.creditHourLow ?? 0,
-            capacity: { enrolled: c.enrolled_count ?? 0, limit: c.capacity ?? 0 },
+            capacity: {
+              enrolled: c.enrolled_count ?? 0,
+              limit: c.capacity ?? 0,
+            },
             attributes: c.attributes ?? [],
             prerequisites: c.prerequisites ?? undefined,
             restrictions: c.restrictions ?? undefined,
@@ -122,15 +127,23 @@ export default function App() {
       .catch(() => setAllCourses([]));
   }, [semesterId]);
 
-  const [activeLeftTab, setActiveLeftTab] = useState<"welcome" | "info" | "crn">("info");
+  const [activeLeftTab, setActiveLeftTab] = useState<
+    "welcome" | "info" | "crn"
+  >("info");
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [hoveredCourse, setHoveredCourse] = useState<Course | null>(null);
   const [favorites, setFavorites] = useState<Course[]>([]);
-  const [customColors, setCustomColors] = useState<Map<string, string>>(new Map());
+  const [customColors, setCustomColors] = useState<Map<string, string>>(
+    new Map(),
+  );
 
   // ── Schedule slots ──────────────────────────────────────────────
   const [activeSlot, setActiveSlot] = useState(1);
-  const [schedules, setSchedules] = useState<Record<number, Course[]>>({ 1: [], 2: [], 3: [] });
+  const [schedules, setSchedules] = useState<Record<number, Course[]>>({
+    1: [],
+    2: [],
+    3: [],
+  });
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -245,7 +258,9 @@ export default function App() {
     () => scheduled.reduce((acc, c) => acc + (c.credits ?? 0), 0),
     [scheduled],
   );
-  const [courseDifficulties, setCourseDifficulties] = useState<Record<string, number>>({});
+  const [courseDifficulties, setCourseDifficulties] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     scheduled.forEach((c) => {
@@ -265,15 +280,23 @@ export default function App() {
   }, [scheduled]);
 
   const averageDifficulty = useMemo(() => {
-    const rated = scheduled.filter((c) => courseDifficulties[c.code] !== undefined);
+    const rated = scheduled.filter(
+      (c) => courseDifficulties[c.code] !== undefined,
+    );
     if (rated.length === 0) return null;
-    return rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) / rated.length;
+    return (
+      rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) /
+      rated.length
+    );
   }, [scheduled, courseDifficulties]);
 
   const courseColorMap = useMemo(() => {
     const map = new Map<string, string>();
     scheduled.forEach((c, i) => {
-      map.set(c.id, customColors.get(c.id) ?? COURSE_COLORS[i % COURSE_COLORS.length]);
+      map.set(
+        c.id,
+        customColors.get(c.id) ?? COURSE_COLORS[i % COURSE_COLORS.length],
+      );
     });
     return map;
   }, [scheduled, customColors]);
