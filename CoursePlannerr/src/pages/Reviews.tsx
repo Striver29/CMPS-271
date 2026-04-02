@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
-const API = `${import.meta.env.VITE_API_URL}`;
+const API = "https://cmps-271-1.onrender.com";
 console.log('API URL:', API);
 
 type Tab = 'courses' | 'professors';
