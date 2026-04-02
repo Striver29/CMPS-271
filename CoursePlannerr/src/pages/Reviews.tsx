@@ -118,6 +118,8 @@ export default function Reviews() {
   const [selectedProf, setSelectedProf] = useState<{ id: string; full_name: string } | null>(null);
   const [profRatings, setProfRatings] = useState<ProfessorRating[]>([]);
   const [profAvg, setProfAvg] = useState<{ rating: string; count: number } | null>(null);
+  // NEW: courses taught by the selected professor
+  const [profCourses, setProfCourses] = useState<{ department: string; course_number: string; title: string }[]>([]);
 
   const [showForm, setShowForm] = useState(false);
   const [formRating, setFormRating] = useState(0);
@@ -213,7 +215,16 @@ export default function Reviews() {
     setShowForm(false);
     setSubmitted(false);
     setSubmitError(null);
+    setFormDept("");
+    setFormCourseNum("");
+    setProfCourses([]);
     loadProfRatings(p.id);
+
+    // Fetch courses taught by this professor from the DB
+    fetch(`${API}/api/professors/${p.id}/courses`)
+      .then(r => r.json())
+      .then(data => setProfCourses(Array.isArray(data) ? data : []))
+      .catch(() => setProfCourses([]));
   };
 
   const handleSubmitCourse = async () => {
@@ -338,15 +349,39 @@ export default function Reviews() {
   const renderForm = (onSubmit: () => void, showDiff = false, showCourse = false) => (
     <div style={{ ...card, marginBottom: 24 }}>
       <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 18, color: "var(--text)" }}>Your Review</div>
+
       {showCourse && (
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 13, color: "var(--muted)", display: "block", marginBottom: 6 }}>Course</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input style={inputStyle} placeholder="CMPS" value={formDept} onChange={e => setFormDept(e.target.value)} />
-            <input style={inputStyle} placeholder="201" value={formCourseNum} onChange={e => setFormCourseNum(e.target.value)} />
-          </div>
+          {profCourses.length > 0 ? (
+            <select
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+              value={formDept && formCourseNum ? `${formDept}|${formCourseNum}` : ""}
+              onChange={e => {
+                const [dept, num] = e.target.value.split("|");
+                setFormDept(dept || "");
+                setFormCourseNum(num || "");
+              }}
+            >
+              <option value="">— Select a course —</option>
+              {profCourses.map(c => (
+                <option
+                  key={`${c.department}-${c.course_number}`}
+                  value={`${c.department}|${c.course_number}`}
+                >
+                  {c.department} {c.course_number} — {c.title}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={inputStyle} placeholder="CMPS" value={formDept} onChange={e => setFormDept(e.target.value)} />
+              <input style={inputStyle} placeholder="201" value={formCourseNum} onChange={e => setFormCourseNum(e.target.value)} />
+            </div>
+          )}
         </div>
       )}
+
       <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 13, color: "var(--muted)", display: "block", marginBottom: 6 }}>Overall Rating</label>
         <StarInput value={formRating} onChange={setFormRating} />
