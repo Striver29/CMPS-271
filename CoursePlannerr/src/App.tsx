@@ -17,6 +17,8 @@ import GradeCalculator from "./components/GradeCalculator";
 import AdminPortal from "./pages/AdminPortal";
 import AdminRoute from "./components/AdminRoute";
 
+const API_URL = import.meta.env.VITE_API_URL || "";
+
 const COURSE_COLORS = [
   "#1a5fa8",
   "#1a7a45",
@@ -43,8 +45,8 @@ export default function App() {
   );
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/terms")
-      .then((res) => res.json())
+    fetch(`${API_URL}/api/terms`)
+    .then((res) => res.json())
       .then((data) => {
         const formatted = data.map(
           (t: { code: string; description: string }) => ({
@@ -64,8 +66,8 @@ export default function App() {
   useEffect(() => {
     if (!semesterId) return;
     setAllCourses([]);
-    fetch(`http://localhost:3001/api/courses?term=${semesterId}`)
-      .then((res) => res.json())
+    fetch(`${API_URL}/api/courses?term=${semesterId}`)
+    .then((res) => res.json())
       .then((data) => {
         const formatted: Course[] = data.map((c: any) => {
           const meetings = [];
@@ -263,8 +265,8 @@ export default function App() {
     scheduled.forEach((c) => {
       const [dept, num] = c.code.split(" ");
       if (courseDifficulties[c.code] !== undefined) return;
-      fetch(`http://localhost:3001/api/ratings/course/${dept}/${num}`)
-        .then((r) => r.json())
+      fetch(`${API_URL}/api/ratings/course/${dept}/${num}`)
+      .then((r) => r.json())
         .then((data) => {
           if (data.averages?.difficulty > 0) {
             setCourseDifficulties((prev) => ({
