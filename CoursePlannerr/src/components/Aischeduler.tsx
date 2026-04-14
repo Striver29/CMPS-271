@@ -53,7 +53,7 @@ export function AIScheduler({ allCourses, onApplySchedule, activeSlot }: Props) 
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: "Hi! I'm your AI schedule builder powered by Gemini.\n\nTell me which courses you want and any preferences:\n\n\"I want CMPS 271, MATH 201, ARAB 201. No Fridays, prefer mornings.\"\n\nI'll pick the best sections, avoid conflicts, and estimate how tough your semester will be."
+      content: "Hi! I'm your AI course assistant.\n\nI can do two things:\n1. Build a schedule from the course codes you want.\n2. Summarize what students wrote about a professor.\n\nTry:\n\"I want CMPS 271, MATH 201, ARAB 201. No Fridays, prefer mornings.\"\n\nOr:\n\"Summarize the reviews for Professor Jane Doe.\""
     }
   ]);
   const [input, setInput] = useState('');
@@ -151,7 +151,7 @@ export function AIScheduler({ allCourses, onApplySchedule, activeSlot }: Props) 
           <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z" stroke="currentColor" strokeWidth="1.5"/>
           <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
-        AI Scheduler
+        AI Assistant
       </button>
 
       {open && (
@@ -162,7 +162,7 @@ export function AIScheduler({ allCourses, onApplySchedule, activeSlot }: Props) 
                 <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z" stroke="currentColor" strokeWidth="1.5"/>
                 <circle cx="12" cy="12" r="3" fill="currentColor"/>
               </svg>
-              AI Schedule Builder
+              AI Course Assistant
             </div>
             <button className="ai-panel__close" onClick={() => setOpen(false)}>✕</button>
           </div>
@@ -210,7 +210,7 @@ export function AIScheduler({ allCourses, onApplySchedule, activeSlot }: Props) 
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              placeholder="e.g. CMPS 271, MATH 201, no Fridays, mornings"
+              placeholder="Ask for a schedule or professor review summary"
               disabled={loading}
             />
             <button onClick={sendMessage} disabled={loading || !input.trim()}>

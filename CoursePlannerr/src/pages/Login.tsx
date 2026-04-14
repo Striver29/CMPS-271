@@ -4,11 +4,21 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
 const AUB_DOMAINS = ["@aub.edu.lb", "@mail.aub.edu"];
-const isAubEmail = (address) => AUB_DOMAINS.some((d) => address.endsWith(d));
+const isAubEmail = (address: string) => AUB_DOMAINS.some((d) => address.endsWith(d));
+
+type AuthView = "login" | "signup" | "reset";
+
+type FieldProps = {
+  label: string;
+  type: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+};
 
 export default function Login() {
   const navigate = useNavigate();
-  const [view, setView] = useState("login");
+  const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -25,13 +35,13 @@ export default function Login() {
   }, []);
 
   const resetBanners = () => { setError(""); setInfo(""); setSuccess(""); };
-  const switchView = (v) => {
+  const switchView = (v: AuthView) => {
     resetBanners();
     setEmail(""); setPassword(""); setConfirmPassword("");
     setView(v);
   };
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); resetBanners();
     if (!email || !password) { setError("Please fill in both fields."); return; }
     const norm = email.trim().toLowerCase();
@@ -51,7 +61,7 @@ export default function Login() {
     navigate("/");
   };
 
-  const handleSignUp = async (e) => {
+  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); resetBanners();
     if (!email || !password || !confirmPassword) { setError("Please fill in all fields."); return; }
     const norm = email.trim().toLowerCase();
@@ -71,7 +81,7 @@ export default function Login() {
     setSuccess(`Verification email sent to ${norm}. Click the link in your inbox, then come back to sign in.`);
   };
 
-  const handleReset = async (e) => {
+  const handleReset = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); resetBanners();
     if (!email) { setError("Please enter your email."); return; }
     const norm = email.trim().toLowerCase();
@@ -149,7 +159,7 @@ export default function Login() {
   );
 }
 
-function Field({ label, type, placeholder, value, onChange }) {
+function Field({ label, type, placeholder, value, onChange }: FieldProps) {
   return (
     <div className="uf-field">
       <label className="uf-label">{label}</label>
@@ -157,7 +167,7 @@ function Field({ label, type, placeholder, value, onChange }) {
         type={type}
         placeholder={placeholder}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         className="uf-input"
       />
     </div>

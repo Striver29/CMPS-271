@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import type { Course, Day, Meeting } from '../types';
 import jsPDF from 'jspdf';
+import { expandCoursesToMeetingSlots, findFreeSlots, WEEKDAY_ORDER, type FreeSlot, type WeekdayKey } from '../utils/schedule.ts';
 
 const COURSE_COLORS = [
   "#1a5fa8","#1a7a45","#6b2d8b","#b35a0a","#0e6b5e",
@@ -23,6 +24,9 @@ const DAYS: { key: Day; label: string }[] = [
   { key: 'S', label: 'Saturday' },
 ];
 
+const GRID_START_OF_DAY = '08:00';
+const GRID_END_OF_DAY = '21:00';
+
 function toMinutes(hhmm: string) {
   const [h, m] = hhmm.split(':').map((x) => Number(x));
   return h * 60 + m;
@@ -36,6 +40,14 @@ function formatTime(hhmm: string) {
   const h12 = h % 12 || 12;
   const ampm = h >= 12 ? 'PM' : 'AM';
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+function formatDuration(start: string, end: string) {
+  const diff = Math.max(0, toMinutes(end) - toMinutes(start));
+  const hours = Math.floor(diff / 60);
+  const minutes = diff % 60;
+  if (hours && minutes) return `${hours}h ${minutes}m`;
+  if (hours) return `${hours}h`;
+  return `${minutes}m`;
 }
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -74,8 +86,8 @@ type Props = {
 };
 
 export function ScheduleGrid({ courses, hoveredCourse, scheduledIds, onSelectCourse, onHoverCourse, courseColorMap, onColorChange, semesterLabel = 'Schedule' }: Props) {
-  const startDayMin = 8 * 60;
-  const endDayMin = 21 * 60;
+  const startDayMin = toMinutes(GRID_START_OF_DAY);
+  const endDayMin = toMinutes(GRID_END_OF_DAY);
   const pxPerMin = 1;
   const gridHeight = (endDayMin - startDayMin) * pxPerMin;
 
@@ -161,6 +173,30 @@ export function ScheduleGrid({ courses, hoveredCourse, scheduledIds, onSelectCou
     blocks.filter(b => !b.hidden).map(b => ({ day: b.day, startMin: b.startMin, endMin: b.endMin })),
     [blocks]
   );
+
+  const freeSlotsByDay = useMemo(
+    () => findFreeSlots(expandCoursesToMeetingSlots(courses), GRID_START_OF_DAY, GRID_END_OF_DAY),
+    [courses]
+  );
+
+  const longestFreeSlotByDay = useMemo(() => (
+    WEEKDAY_ORDER.reduce<Record<WeekdayKey, FreeSlot | null>>((acc, day) => {
+      acc[day] = freeSlotsByDay[day].reduce<FreeSlot | null>((longest, slot) => {
+        if (!longest) return slot;
+        const slotDuration = toMinutes(slot.end) - toMinutes(slot.start);
+        const longestDuration = toMinutes(longest.end) - toMinutes(longest.start);
+        return slotDuration > longestDuration ? slot : longest;
+      }, null);
+      return acc;
+    }, {
+      Mon: null,
+      Tue: null,
+      Wed: null,
+      Thu: null,
+      Fri: null,
+      Sat: null,
+    })
+  ), [freeSlotsByDay]);
 
   const previewBlocks = useMemo(() => {
     if (!hoveredCourse || scheduledIds.has(hoveredCourse.id)) return [];
@@ -375,6 +411,50 @@ export function ScheduleGrid({ courses, hoveredCourse, scheduledIds, onSelectCou
         >
           PDF ↗
         </button>
+      </div>
+
+      <div className="schFreeStrip" aria-label="Weekly free time gaps">
+        {WEEKDAY_ORDER.map((day) => {
+          const slots = freeSlotsByDay[day];
+          const longestSlot = longestFreeSlotByDay[day];
+          const isAllDayFree = slots.length === 1
+            && slots[0].start === GRID_START_OF_DAY
+            && slots[0].end === GRID_END_OF_DAY;
+
+          return (
+            <div key={day} className="schFreeCard">
+              <div className="schFreeCard__top">
+                <span className="schFreeCard__day">{day}</span>
+                <span className="schFreeCard__meta">
+                  {slots.length === 0
+                    ? 'No 30+ min gaps'
+                    : isAllDayFree
+                      ? 'Free all day'
+                      : `${slots.length} ${slots.length === 1 ? 'gap' : 'gaps'}`}
+                </span>
+              </div>
+
+              {longestSlot && !isAllDayFree ? (
+                <div className="schFreeCard__summary">
+                  Longest: {formatDuration(longestSlot.start, longestSlot.end)}
+                </div>
+              ) : null}
+
+              <div className="schFreeCard__slots">
+                {slots.length === 0 ? (
+                  <span className="schFreeEmpty">No open block long enough to matter.</span>
+                ) : slots.map((slot) => (
+                  <span
+                    key={`${day}-${slot.start}-${slot.end}`}
+                    className={`schFreeChip${isAllDayFree ? ' isFullDay' : ''}`}
+                  >
+                    {formatTime(slot.start)} - {formatTime(slot.end)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="schDays">

@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Course } from '../types';
 
@@ -69,14 +70,59 @@ export function RightSearchPanel({
   const scheduledIds = useMemo(() => new Set(scheduled.map((c) => c.id)), [scheduled]);
   const favoriteIds = useMemo(() => new Set(favorites.map((c) => c.id)), [favorites]);
 
+  // ── Linked-section helpers ──────────────────────────────────────────────────
+  const isLectureCourse = (c: Course) => {
+    const type = (c.scheduleType ?? '').toLowerCase();
+    const sec  = (c.section ?? '').toUpperCase();
+    return type.includes('lecture') || sec.startsWith('L');
+  };
+
+  const getLinkedSections = useCallback((course: Course): Course[] => {
+    if (!course.isSectionLinked || !course.linkIdentifier || !course.subjectCourse) return [];
+    const numSuffix = course.linkIdentifier.replace(/^[A-Za-z]+/, '');
+    const thisIsLecture = isLectureCourse(course);
+    return allCourses.filter(other => {
+      if (other.id === course.id) return false;
+      if (other.subjectCourse !== course.subjectCourse) return false;
+      if (!other.isSectionLinked || !other.linkIdentifier) return false;
+      const otherNum = other.linkIdentifier.replace(/^[A-Za-z]+/, '');
+      if (otherNum !== numSuffix) return false;
+      return thisIsLecture ? !isLectureCourse(other) : isLectureCourse(other);
+    });
+  }, [allCourses]);
+
+  const fmtTime = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  };
+
+  const fmtMeeting = (course: Course) => {
+    if (!course.meetings.length) return 'TBA';
+    const m = course.meetings[0];
+    return `${m.days.join('')} ${fmtTime(m.start)}–${fmtTime(m.end)}`;
+  };
+
+  // Colour per schedule type
+  const linkedTypeColor = (scheduleType?: string) => {
+    const t = (scheduleType ?? '').toLowerCase();
+    if (t.includes('lab')) return { bg: 'rgba(122,162,255,0.12)', border: 'rgba(122,162,255,0.35)', badge: '#7aa2ff', label: 'Lab' };
+    if (t.includes('recitation')) return { bg: 'rgba(117,210,144,0.12)', border: 'rgba(117,210,144,0.35)', badge: '#75d290', label: 'Rec' };
+    if (t.includes('lecture')) return { bg: 'rgba(255,209,102,0.10)', border: 'rgba(255,209,102,0.30)', badge: '#ffd166', label: 'Lec' };
+    return { bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.15)', badge: '#aab4c4', label: scheduleType ?? '—' };
+  };
+
   const CourseItem = ({ c }: { c: Course }) => {
     const inSchedule = scheduledIds.has(c.id);
     const isFav = favoriteIds.has(c.id);
+    const [hovered, setHovered] = React.useState(false);
+    const linked = React.useMemo(() => getLinkedSections(c), [c.id]);
+
     return (
       <li
         className="resultItem"
-        onMouseEnter={() => onHoverCourse(c)}
-        onMouseLeave={() => onHoverCourse(null)}
+        onMouseEnter={() => { onHoverCourse(c); setHovered(true); }}
+        onMouseLeave={() => { onHoverCourse(null); setHovered(false); }}
         style={{ flexDirection: 'column', gap: 0, padding: 0 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -96,7 +142,18 @@ export function RightSearchPanel({
             title="Open course details"
             style={{ flex: 1 }}
           >
-            <div className="resultMain__line1">{c.crn} {c.code} — {c.section} <span className="muted">{c.instructor}</span></div>
+            <div className="resultMain__line1">
+              {c.crn} {c.code} — {c.section}
+              {c.scheduleType && c.scheduleType !== 'Lecture' && (
+                <span style={{
+                  marginLeft: 5, fontSize: 9, padding: '1px 5px',
+                  borderRadius: 3, backgroundColor: linkedTypeColor(c.scheduleType).bg,
+                  border: `1px solid ${linkedTypeColor(c.scheduleType).border}`,
+                  color: linkedTypeColor(c.scheduleType).badge, verticalAlign: 'middle',
+                }}>{c.scheduleType}</span>
+              )}
+              <span className="muted"> {c.instructor}</span>
+            </div>
             <div className="resultMain__line2 muted">{c.title}</div>
           </button>
 
@@ -107,6 +164,77 @@ export function RightSearchPanel({
             title={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >★</button>
         </div>
+
+        {/* Linked sections — shown on hover */}
+        {hovered && linked.length > 0 && (
+          <div style={{
+            margin: '0 6px 6px 6px',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.08)',
+            backgroundColor: 'rgba(0,0,0,0.25)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '4px 8px',
+              fontSize: 10,
+              fontWeight: 700,
+              color: '#7aa2ff',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              backgroundColor: 'rgba(122,162,255,0.06)',
+            }}>
+              🔗 Linked {isLectureCourse(c) ? 'Labs / Recitations' : 'Lectures'} ({linked.length})
+            </div>
+            {linked.map((ls, i) => {
+              const tc = linkedTypeColor(ls.scheduleType);
+              return (
+                <div key={ls.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '5px 8px',
+                  borderBottom: i < linked.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                  backgroundColor: tc.bg,
+                }}>
+                  {/* Type badge */}
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                    borderRadius: 3, border: `1px solid ${tc.border}`,
+                    color: tc.badge, whiteSpace: 'nowrap', flexShrink: 0,
+                  }}>{tc.label}</span>
+
+                  {/* Section + CRN */}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#e9eef7', whiteSpace: 'nowrap' }}>
+                    {ls.section}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#6b7a8d', whiteSpace: 'nowrap' }}>
+                    CRN {ls.crn}
+                  </span>
+
+                  {/* Instructor */}
+                  <span style={{
+                    fontSize: 10, color: '#aab4c4',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                  }}>
+                    {ls.instructor !== 'TBA' ? ls.instructor : ''}
+                  </span>
+
+                  {/* Time */}
+                  <span style={{
+                    fontSize: 10, color: '#aab4c4', whiteSpace: 'nowrap', flexShrink: 0,
+                  }}>
+                    {fmtMeeting(ls)}
+                  </span>
+
+                  {/* Capacity dot */}
+                  <span style={{
+                    width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                    backgroundColor: ls.capacity.enrolled < ls.capacity.limit ? '#4ade80' : '#f87171',
+                  }} title={`${ls.capacity.enrolled}/${ls.capacity.limit}`} />
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '4px', padding: '3px 8px 5px 34px' }}>
           <button

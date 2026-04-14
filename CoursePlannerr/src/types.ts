@@ -24,4 +24,9 @@ export type Course = {
   difficulty: number; // 1..5 (demo)
   workload: number; // 1..5 (demo)
   meetings: Meeting[];
+  // Linking fields (from Banner isSectionLinked / linkIdentifier)
+  isSectionLinked?: boolean;
+  linkIdentifier?: string | null;
+  scheduleType?: string; // e.g. 'Lecture', 'Lab', 'Recitation'
+  subjectCourse?: string; // e.g. 'CMPS201' — used to scope linked-section lookup
 };

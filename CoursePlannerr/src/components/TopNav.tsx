@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import MeetingRoomOutlinedIcon from '@mui/icons-material/MeetingRoomOutlined';
 import { supabase } from '../supabaseClient.ts';
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
   semesters: { id: string; label: string }[];
   lastUpdatedText: string;
   onSemesterChange: (id: string) => void;
+  activePage?: 'home' | 'empty-classes';
 };
 
 export function TopNav({
@@ -18,6 +20,7 @@ export function TopNav({
   semesters,
   lastUpdatedText,
   onSemesterChange,
+  activePage = 'home',
 }: Props) {
   const navigate = useNavigate();
   const [showGpa, setShowGpa] = useState(false);
@@ -57,33 +60,45 @@ export function TopNav({
           <div className="topNav__logo" aria-hidden="true">
             {appName.slice(0, 1)}
           </div>
-          <span className="topNav__brandText">{appName}</span>
+          <button
+            type="button"
+            className="topNav__brandButton"
+            onClick={() => window.location.reload()}
+            title={`Refresh ${appName}`}
+          >
+            <span className="topNav__brandText">{appName}</span>
+          </button>
         </div>
         <nav className="topNav__links" aria-label="Primary">
-          <a
-            className="topNav__link"
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              document.querySelector('.middlePanel')?.scrollIntoView({ behavior: 'smooth' });
-            }}
+          <button
+            type="button"
+            className={`topNav__link topNav__linkButton${activePage === 'home' ? ' isActive' : ''}`}
+            onClick={() => navigate('/')}
           >
             Home
-          </a>
-          <a
-            className="topNav__link"
-            style={{ cursor: 'pointer' }}
+          </button>
+          <button
+            type="button"
+            className="topNav__link topNav__linkButton"
             onClick={() => navigate('/reviews')}
           >
             Reviews
-          </a>
-          <a
-            className="topNav__link"
-            href="#"
-            onClick={(e) => { e.preventDefault(); setShowGpa(true); }}
+          </button>
+          <button
+            type="button"
+            className={`topNav__link topNav__linkButton${activePage === 'empty-classes' ? ' isActive' : ''}`}
+            onClick={() => navigate('/empty-classes')}
+          >
+            <MeetingRoomOutlinedIcon fontSize="inherit" />
+            Empty Classes
+          </button>
+          <button
+            type="button"
+            className="topNav__link topNav__linkButton"
+            onClick={() => setShowGpa(true)}
           >
             GPA Calculator
-          </a>
+          </button>
         </nav>
         <div className="topNav__status" title={lastUpdatedText}>
           <span className="topNav__statusText">{semesterLabel} — {lastUpdatedText}</span>

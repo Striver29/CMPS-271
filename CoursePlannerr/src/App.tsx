@@ -11,7 +11,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Reviews from './pages/Reviews';
 import { supabase } from './supabaseClient.ts';
 import UpdatePassword from "./pages/UpdatePassword.tsx";
-import { AIScheduler } from './components/AIScheduler';
+import { AIScheduler } from './components/Aischeduler';
+import EmptyClasses from './pages/EmptyClasses.tsx';
+import { mapApiCoursesToCourses } from './utils/courseApi.ts';
 
 const COURSE_COLORS = [
   "#1a5fa8","#1a7a45","#6b2d8b","#b35a0a","#0e6b5e",
@@ -19,7 +21,7 @@ const COURSE_COLORS = [
 ];
 
 export default function App() {
-  const appName = 'AUB Course Planner';
+  const appName = 'UniFlow';
 
   const [semesters, setSemesters] = useState<{ id: string; label: string }[]>([]);
   const [semesterId, setSemesterId] = useState('');
@@ -47,51 +49,7 @@ export default function App() {
     fetch(`http://localhost:3001/api/courses?term=${semesterId}`)
       .then(res => res.json())
       .then((data) => {
-        const formatted: Course[] = data.map((c: any) => {
-          const meetings = [];
-          if (c.schedule?.days && c.schedule?.time) {
-            const dayNameMap: Record<string, string> = {
-              monday: 'M', tuesday: 'T', wednesday: 'W',
-              thursday: 'R', friday: 'F', saturday: 'S',
-            };
-            const dayChars = (c.schedule.days as string)
-              .toLowerCase().split(/[\s,]+/)
-              .map((d: string) => dayNameMap[d]).filter(Boolean) as Course['meetings'][0]['days'];
-            const parseMilitary = (t: string) => {
-              const s = t.trim().replace(':', '');
-              if (s.length === 3) return `0${s[0]}:${s.slice(1)}`;
-              if (s.length === 4) return `${s.slice(0, 2)}:${s.slice(2)}`;
-              return t.trim();
-            };
-            const timeParts = (c.schedule.time as string).split('-').map((t: string) => t.trim());
-            if (timeParts.length === 2) {
-              meetings.push({
-                days: dayChars,
-                start: parseMilitary(timeParts[0]),
-                end: parseMilitary(timeParts[1]),
-                location: c.schedule?.location ?? '',
-                type: c.schedule?.type ?? 'Lecture',
-              });
-            }
-          }
-          return {
-            id: c.id, crn: String(c.crn),
-            code: `${c.department} ${c.course_number}`,
-            title: c.title,
-            instructor: c.professors?.full_name ?? 'TBA',
-            campus: c.campus ?? 'Main Campus',
-            section: c.schedule?.section ?? '',
-            credits: c.credits ?? c.creditHourHigh ?? c.creditHourLow ?? 0,
-            capacity: { enrolled: c.enrolled_count ?? 0, limit: c.capacity ?? 0 },
-            attributes: c.attributes ?? [],
-            prerequisites: c.prerequisites ?? undefined,
-            restrictions: c.restrictions ?? undefined,
-            difficulty: c.difficulty ?? 0,
-            workload: c.workload ?? 0,
-            meetings,
-          };
-        });
-        setAllCourses(formatted);
+        setAllCourses(mapApiCoursesToCourses(data));
       })
       .catch(() => setAllCourses([]));
   }, [semesterId]);
@@ -260,6 +218,7 @@ export default function App() {
         semesterLabel={semesterLabel}
         lastUpdatedText={semesterId ? semesterLabel : 'Demo data'}
         onSemesterChange={setSemesterId}
+        activePage="home"
       />
       <div className="mainContainer">
         <LeftInfoPanel
@@ -305,6 +264,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<ProtectedRoute>{mainApp}</ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><Reviews /></ProtectedRoute>} />
+      <Route path="/empty-classes" element={<ProtectedRoute><EmptyClasses /></ProtectedRoute>} />
       <Route path="/update-password" element={<UpdatePassword />} />
     </Routes>
   );

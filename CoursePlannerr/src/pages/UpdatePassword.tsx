@@ -42,7 +42,7 @@ export default function UpdatePassword() {
     });
   }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     if (!password || !confirmPassword) { setError("Please fill in both fields."); return; }
@@ -101,7 +101,7 @@ export default function UpdatePassword() {
                   type="password"
                   placeholder="At least 8 characters"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                   className="uf-input"
                 />
               </div>
@@ -111,7 +111,7 @@ export default function UpdatePassword() {
                   type="password"
                   placeholder="Re-enter new password"
                   value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
                   className="uf-input"
                 />
               </div>
