@@ -35,7 +35,7 @@ const COURSE_COLORS = [
 ];
 
 export default function App() {
-  const appName = "AUB Course Planner";
+  const appName = "Uniflow";
 
   const [semesters, setSemesters] = useState<{ id: string; label: string }[]>(
     [],
@@ -48,7 +48,7 @@ export default function App() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/terms`)
-    .then((res) => res.json())
+      .then((res) => res.json())
       .then((data) => {
         const formatted = data.map(
           (t: { code: string; description: string }) => ({
@@ -69,7 +69,7 @@ export default function App() {
     if (!semesterId) return;
     setAllCourses([]);
     fetch(`${API_URL}/api/courses?term=${semesterId}`)
-    .then((res) => res.json())
+      .then((res) => res.json())
       .then((data) => {
         setAllCourses(mapApiCoursesToCourses(data));
       })
@@ -212,7 +212,7 @@ export default function App() {
       const [dept, num] = c.code.split(" ");
       if (courseDifficulties[c.code] !== undefined) return;
       fetch(`${API_URL}/api/ratings/course/${dept}/${num}`)
-      .then((r) => r.json())
+        .then((r) => r.json())
         .then((data) => {
           if (data.averages?.difficulty > 0) {
             setCourseDifficulties((prev) => ({
@@ -293,16 +293,19 @@ export default function App() {
           selectedCourse={displayedCourse}
           selectedCrns={selectedCrns}
         />
-        <ScheduleGrid
-          courses={scheduled}
-          hoveredCourse={hoveredCourse}
-          scheduledIds={scheduledIds}
-          courseColorMap={courseColorMap}
-          onSelectCourse={selectCourse}
-          onHoverCourse={handleHoverCourse}
-          onColorChange={handleColorChange}
-          semesterLabel={semesterLabel}
-        />
+
+<ScheduleGrid
+  courses={scheduled}
+  hoveredCourse={hoveredCourse}
+  scheduledIds={scheduledIds}
+  courseColorMap={courseColorMap}
+  onSelectCourse={selectCourse}
+  onHoverCourse={handleHoverCourse}
+  onColorChange={handleColorChange}
+  semesterLabel={semesterLabel}
+/>
+
+
         <RightSearchPanel
           allCourses={allCourses}
           scheduled={scheduled}

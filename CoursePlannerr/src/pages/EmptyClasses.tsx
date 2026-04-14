@@ -272,7 +272,7 @@ export default function EmptyClasses() {
   return (
     <div className="emptyClassesShell">
       <TopNav
-        appName="AUB Course Planner"
+        appName="Uniflow"
         semesterId={semesterId}
         semesters={semesters}
         semesterLabel={semesterLabel}

@@ -30,31 +30,109 @@
   }
 }
 
+/* ── Light mode — warm neutral, not blinding white ── */
 body.light {
-  --bg: #f0f2f5;
-  --panel: #ffffff;
-  --panel2: #f8f9fb;
-  --border: #dde1e7;
-  --text: #1a1f2e;
-  --muted: #6b7280;
+  --bg: #eef0f5;
+  --panel: #f9fafb;
+  --panel2: #f0f2f7;
+  --border: #d4d9e4;
+  --text: #111827;
+  --muted: #5c6675;
   --accent: #2b6cff;
-  --danger: #ff5a5f;
+  --danger: #e53e3e;
+  --select-surface: #f9fafb;
+  --select-surface-muted: #f0f2f7;
+  --select-text: #111827;
+  --select-border: #d4d9e4;
+  --select-option-surface: #ffffff;
+  --select-option-text: #111827;
+  --select-disabled-text: #9ca3af;
+  --select-scheme: light;
 }
 
-body.light .topNav { background: #ffffff; }
-body.light .rightPanel__top { background: #ffffff; }
-body.light .sideTabs { background: #ffffff; }
-body.light .schDays { background: #f8f9fb; }
-body.light .schCanvas__hline { border-top: 1px solid rgba(0,0,0,0.06); }
-body.light .courseBlock { border: 1px solid rgba(0,0,0,0.12); }
-body.light .resultItem { background: #ffffff; }
-body.light .miniStats__item { background: #ffffff; }
-body.light .sessionCard { background: rgba(0,0,0,0.03); }
-body.light .emptyState { border-color: rgba(0,0,0,0.15); background: rgba(0,0,0,0.02); }
+body.light .topNav {
+  background: #ffffff;
+  border-bottom: 1px solid #d4d9e4;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+body.light .topNav__link { color: #111827; }
 body.light .topNav__link:hover { background: rgba(0,0,0,0.05); }
+body.light .topNav__link.isActive {
+  background: rgba(43,108,255,0.1);
+  color: #1a4ed8;
+}
+body.light .topNav__logout { color: #111827; border-color: #d4d9e4; }
 body.light .topNav__logout:hover { background: rgba(0,0,0,0.05); }
-body.light .schTab.isActive { background: rgba(0,0,0,0.06); }
-body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
+body.light .topNav__brandText { color: #111827; }
+body.light .topNav__brandButton:hover .topNav__brandText { color: #2b6cff; }
+
+body.light .sideTabs { background: #f0f2f7; }
+body.light .sideTabs__tab { color: #111827; border-color: #d4d9e4; }
+body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.07); }
+
+body.light .rightPanel__top { background: #f0f2f7; }
+body.light .schTab { color: #111827; border-color: #d4d9e4; }
+body.light .schTab.isActive { background: rgba(0,0,0,0.07); }
+
+body.light .schDays { background: #f0f2f7; }
+body.light .schDays__day { color: #111827; }
+body.light .schCanvas__hline { border-top: 1px solid rgba(0,0,0,0.07); }
+body.light .schCanvas__col { border-right: 1px solid #d4d9e4; }
+
+body.light .courseBlock {
+  border: 1px solid rgba(0,0,0,0.1);
+  color: #ffffff;
+}
+
+body.light .resultItem {
+  background: #ffffff;
+  border-color: #d4d9e4;
+}
+body.light .resultItem:hover { border-color: #b0b8cc; }
+
+body.light .miniStats__item {
+  background: #ffffff;
+  border-color: #d4d9e4;
+}
+
+body.light .sessionCard {
+  background: rgba(0,0,0,0.03);
+  border-color: #d4d9e4;
+}
+
+body.light .infoBox { border-color: #d4d9e4; }
+body.light .welcomeBox { border-color: #d4d9e4; }
+body.light .crnBox { border-color: #d4d9e4; }
+
+body.light .emptyState {
+  border-color: #c8cdd9;
+  background: rgba(0,0,0,0.02);
+  color: #5c6675;
+}
+
+body.light .searchBox {
+  background: #ffffff;
+  border-color: #d4d9e4;
+  color: #111827;
+}
+body.light .searchBox:focus { border-color: rgba(43,108,255,0.6); }
+body.light .searchBox::placeholder { color: #9ca3af; }
+
+body.light .scheduleToggleBtn {
+  background: #f0f2f7;
+  color: #5c6675;
+}
+body.light .scheduleToggleBtn:hover { color: #111827; background: #e8eaf0; }
+
+body.light .schFreeCard {
+  background: rgba(0,0,0,0.03);
+  border-color: #d4d9e4;
+}
+body.light .schFreeChip {
+  background: rgba(43,108,255,0.1);
+  border-color: rgba(43,108,255,0.2);
+  color: #1a4ed8;
+}
 
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; }
@@ -219,14 +297,43 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
 .crnBox__title { font-weight: 800; margin-bottom: 8px; }
 .crnList { margin: 0; padding-left: 18px; color: var(--muted); }
 
+.scheduleToggleRow {
+  flex-shrink: 0;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--border);
+}
+
+.scheduleToggleBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: var(--panel2);
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  padding: 5px 12px;
+  cursor: pointer;
+  text-align: left;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.scheduleToggleBtn:hover { color: var(--text); background: var(--panel); }
+.scheduleToggleBtn__icon {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
 /* ── Middle schedule ── */
 .middlePanel {
   background: var(--bg);
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  flex: 1;
 }
 .schHeader {
   padding: 8px 12px;
@@ -697,14 +804,12 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
    RESPONSIVE BREAKPOINTS
 ══════════════════════════════════════════ */
 
-/* Large desktop (1400px+): give more room to schedule */
 @media (min-width: 1400px) {
   .mainContainer {
     grid-template-columns: 280px 1fr 380px;
   }
 }
 
-/* Medium laptop (1100px – 1280px): shrink side panels */
 @media (max-width: 1280px) {
   .mainContainer {
     grid-template-columns: 230px 1fr 300px;
@@ -712,7 +817,6 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
   .topNav__status { display: none; }
 }
 
-/* Small laptop / large tablet landscape (900px – 1100px) */
 @media (max-width: 1100px) {
   .mainContainer {
     grid-template-columns: 200px 1fr 270px;
@@ -722,7 +826,6 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
   .schDays__day { font-size: 10px; }
 }
 
-/* Tablet portrait (700px – 900px): hide left panel, stack search below */
 @media (max-width: 900px) {
   .appShell { height: auto; overflow: auto; }
   .mainContainer {
@@ -733,7 +836,6 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
   .leftPanel { display: none !important; }
   .middlePanel {
     border-right: none;
-    border-bottom: 1px solid var(--border);
     min-height: 480px;
     height: 60vw;
     max-height: 600px;
@@ -747,7 +849,6 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
   }
 }
 
-/* Mobile (max 600px): compact everything */
 @media (max-width: 600px) {
   .topNav {
     padding: 8px 10px;
@@ -766,7 +867,6 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
   .schDays__day {
     height: 28px;
     font-size: 9px;
-    /* Show single-letter day on very small screens */
   }
   .schTimes { width: 36px; }
   .schTimes__mark { font-size: 9px; padding-left: 2px; }
@@ -806,7 +906,6 @@ body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
   }
 }
 
-/* Very small mobile (max 400px) */
 @media (max-width: 400px) {
   .schDays__day { font-size: 8px; }
   .schTimes__mark { font-size: 8px; }

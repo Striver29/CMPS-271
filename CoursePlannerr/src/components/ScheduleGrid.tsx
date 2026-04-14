@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import type { Course, Day, Meeting } from "../types";
 import jsPDF from "jspdf";
 import {
@@ -9,42 +9,6 @@ import {
   type WeekdayKey,
 } from "../utils/schedule.ts";
 
-const COURSE_COLORS = [
-  "#1a5fa8",
-  "#1a7a45",
-  "#6b2d8b",
-  "#b35a0a",
-  "#0e6b5e",
-  "#8a6d0b",
-  "#123d6e",
-  "#7a1f1f",
-  "#1a6e8a",
-  "#2d5a1a",
-];
-
-const COLOR_GRID = [
-  "#1a5fa8",
-  "#1a7a45",
-  "#6b2d8b",
-  "#b35a0a",
-  "#0e6b5e",
-  "#8a6d0b",
-  "#123d6e",
-  "#7a1f1f",
-  "#1a6e8a",
-  "#2d5a1a",
-  "#5a1a6e",
-  "#6e1a3a",
-  "#1a4a6e",
-  "#3a6e1a",
-  "#6e4a1a",
-  "#2a2a7a",
-  "#7a2a2a",
-  "#2a7a2a",
-  "#7a5a1a",
-  "#1a5a5a",
-];
-
 const DAYS: { key: Day; label: string }[] = [
   { key: "M", label: "Monday" },
   { key: "T", label: "Tuesday" },
@@ -54,8 +18,8 @@ const DAYS: { key: Day; label: string }[] = [
   { key: "S", label: "Saturday" },
 ];
 
-const GRID_START_OF_DAY = '08:00';
-const GRID_END_OF_DAY = '21:00';
+const GRID_START_OF_DAY = "08:00";
+const GRID_END_OF_DAY = "21:00";
 
 function toMinutes(hhmm: string) {
   const [h, m] = hhmm.split(":").map((x) => Number(x));
@@ -136,6 +100,7 @@ export function ScheduleGrid({
   const gridHeight = (endDayMin - startDayMin) * pxPerMin;
 
   const [tipVisible, setTipVisible] = useState(true);
+  const [scheduleVisible, setScheduleVisible] = useState(true);
   const [hoveredBlock, setHoveredBlock] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [reviewModal, setReviewModal] = useState<ReviewModal>(null);
@@ -143,8 +108,6 @@ export function ScheduleGrid({
   const [colorTab, setColorTab] = useState<"picker" | "rgb">("picker");
   const [hue, setHue] = useState(220);
   const [pickerPos, setPickerPos] = useState({ x: 0.3, y: 0.3 });
-  const gradientRef = useRef<HTMLDivElement>(null);
-  const hueRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -168,15 +131,15 @@ export function ScheduleGrid({
       const { r, g, b } = hexToRgb(currentColor);
       setRgbInput({ r, g, b });
       setColorTab("picker");
-      const max = Math.max(r, g, b),
-        min = Math.min(r, g, b);
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
       if (max !== 0) {
         const s = (max - min) / max;
         const v = max / 255;
         setPickerPos({ x: s, y: 1 - v });
       }
     }
-  }, [contextMenu]);
+  }, [contextMenu, courseColorMap]);
 
   const blocks = useMemo(() => {
     const raw: Block[] = [];
@@ -211,8 +174,8 @@ export function ScheduleGrid({
           continue;
         raw[i].isConflict = true;
         raw[j].isConflict = true;
-        const durA = a.endMin - a.startMin,
-          durB = b.endMin - b.startMin;
+        const durA = a.endMin - a.startMin;
+        const durB = b.endMin - b.startMin;
         if (a.addedIndex > b.addedIndex) {
           if (durB > durA) {
             raw[i].zIndex = b.addedIndex + 1;
@@ -256,28 +219,42 @@ export function ScheduleGrid({
   );
 
   const freeSlotsByDay = useMemo(
-    () => findFreeSlots(expandCoursesToMeetingSlots(courses), GRID_START_OF_DAY, GRID_END_OF_DAY),
-    [courses]
+    () =>
+      findFreeSlots(
+        expandCoursesToMeetingSlots(courses),
+        GRID_START_OF_DAY,
+        GRID_END_OF_DAY,
+      ),
+    [courses],
   );
 
-  const longestFreeSlotByDay = useMemo(() => (
-    WEEKDAY_ORDER.reduce<Record<WeekdayKey, FreeSlot | null>>((acc, day) => {
-      acc[day] = freeSlotsByDay[day].reduce<FreeSlot | null>((longest, slot) => {
-        if (!longest) return slot;
-        const slotDuration = toMinutes(slot.end) - toMinutes(slot.start);
-        const longestDuration = toMinutes(longest.end) - toMinutes(longest.start);
-        return slotDuration > longestDuration ? slot : longest;
-      }, null);
-      return acc;
-    }, {
-      Mon: null,
-      Tue: null,
-      Wed: null,
-      Thu: null,
-      Fri: null,
-      Sat: null,
-    })
-  ), [freeSlotsByDay]);
+  const longestFreeSlotByDay = useMemo(
+    () =>
+      WEEKDAY_ORDER.reduce<Record<WeekdayKey, FreeSlot | null>>(
+        (acc, day) => {
+          acc[day] = freeSlotsByDay[day].reduce<FreeSlot | null>(
+            (longest, slot) => {
+              if (!longest) return slot;
+              const slotDuration = toMinutes(slot.end) - toMinutes(slot.start);
+              const longestDuration =
+                toMinutes(longest.end) - toMinutes(longest.start);
+              return slotDuration > longestDuration ? slot : longest;
+            },
+            null,
+          );
+          return acc;
+        },
+        {
+          Mon: null,
+          Tue: null,
+          Wed: null,
+          Thu: null,
+          Fri: null,
+          Sat: null,
+        },
+      ),
+    [freeSlotsByDay],
+  );
 
   const previewBlocks = useMemo(() => {
     if (!hoveredCourse || scheduledIds.has(hoveredCourse.id)) return [];
@@ -289,8 +266,8 @@ export function ScheduleGrid({
       isConflict: boolean;
     }[] = [];
     for (const m of hoveredCourse.meetings) {
-      const s = toMinutes(m.start),
-        e = toMinutes(m.end);
+      const s = toMinutes(m.start);
+      const e = toMinutes(m.end);
       for (const d of m.days) {
         const hasConflict = occupiedSlots.some(
           (slot) => slot.day === d && s < slot.endMin && slot.startMin < e,
@@ -314,7 +291,7 @@ export function ScheduleGrid({
       if (h !== 8) marks.push({ at, label: formatHour(h) });
     }
     return marks;
-  }, []);
+  }, [startDayMin]);
 
   const handleRightClick = (e: React.MouseEvent, courseId: string) => {
     e.preventDefault();
@@ -333,11 +310,9 @@ export function ScheduleGrid({
     handlePickColor(hex);
   };
 
-  // ── PDF Export — respects light/dark mode ──────────────────────────────────
   const handleExportPdf = () => {
     const isLight = document.body.classList.contains("light");
 
-    // Theme colors
     const BG = isLight ? { r: 240, g: 242, b: 245 } : { r: 15, g: 18, b: 23 };
     const PANEL = isLight
       ? { r: 255, g: 255, b: 255 }
@@ -389,21 +364,17 @@ export function ScheduleGrid({
     const END_MIN = maxHour * 60;
     const PX_PER_MIN = GRID_H / (END_MIN - START_MIN);
 
-    // Background
     pdf.setFillColor(BG.r, BG.g, BG.b);
     pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
 
-    // Title
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(13);
     pdf.setTextColor(TEXT.r, TEXT.g, TEXT.b);
     pdf.text(semesterLabel, PAGE_W / 2, MARGIN + 16, { align: "center" });
 
-    // Day header background
     pdf.setFillColor(PANEL.r, PANEL.g, PANEL.b);
     pdf.rect(GRID_X, MARGIN + TITLE_H, GRID_W, HEADER_H, "F");
 
-    // Day headers
     DAYS.forEach((d, i) => {
       const x = GRID_X + i * DAY_W;
       pdf.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
@@ -422,12 +393,10 @@ export function ScheduleGrid({
       });
     });
 
-    // Grid border
     pdf.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
     pdf.setLineWidth(0.5);
     pdf.rect(GRID_X, GRID_Y, GRID_W, GRID_H);
 
-    // Hour lines + time labels
     for (let h = minHour; h <= maxHour; h++) {
       const y = GRID_Y + (h * 60 - START_MIN) * PX_PER_MIN;
       pdf.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
@@ -435,7 +404,6 @@ export function ScheduleGrid({
       pdf.line(GRID_X, y, GRID_X + GRID_W, y);
       if (h !== minHour) {
         const h12 = h % 12 || 12;
-        const ampm = h >= 12 ? "PM" : "AM";
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(7);
         pdf.setTextColor(MUTED.r, MUTED.g, MUTED.b);
@@ -443,7 +411,6 @@ export function ScheduleGrid({
       }
     }
 
-    // Vertical column separators
     DAYS.forEach((_, i) => {
       const x = GRID_X + i * DAY_W;
       pdf.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
@@ -451,7 +418,6 @@ export function ScheduleGrid({
       pdf.line(x, GRID_Y, x, GRID_Y + GRID_H);
     });
 
-    // Course blocks
     visibleBlocks.forEach((b) => {
       const dayIndex = DAYS.findIndex((d) => d.key === b.day);
       if (dayIndex === -1) return;
@@ -578,49 +544,70 @@ export function ScheduleGrid({
         </button>
       </div>
 
-      <div className="schFreeStrip" aria-label="Weekly free time gaps">
-        {WEEKDAY_ORDER.map((day) => {
-          const slots = freeSlotsByDay[day];
-          const longestSlot = longestFreeSlotByDay[day];
-          const isAllDayFree = slots.length === 1
-            && slots[0].start === GRID_START_OF_DAY
-            && slots[0].end === GRID_END_OF_DAY;
-
-          return (
-            <div key={day} className="schFreeCard">
-              <div className="schFreeCard__top">
-                <span className="schFreeCard__day">{day}</span>
-                <span className="schFreeCard__meta">
-                  {slots.length === 0
-                    ? 'No 30+ min gaps'
-                    : isAllDayFree
-                      ? 'Free all day'
-                      : `${slots.length} ${slots.length === 1 ? 'gap' : 'gaps'}`}
-                </span>
-              </div>
-
-              {longestSlot && !isAllDayFree ? (
-                <div className="schFreeCard__summary">
-                  Longest: {formatDuration(longestSlot.start, longestSlot.end)}
-                </div>
-              ) : null}
-
-              <div className="schFreeCard__slots">
-                {slots.length === 0 ? (
-                  <span className="schFreeEmpty">No open block long enough to matter.</span>
-                ) : slots.map((slot) => (
-                  <span
-                    key={`${day}-${slot.start}-${slot.end}`}
-                    className={`schFreeChip${isAllDayFree ? ' isFullDay' : ''}`}
-                  >
-                    {formatTime(slot.start)} - {formatTime(slot.end)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="scheduleToggleRow">
+        <button
+          className="scheduleToggleBtn"
+          onClick={() => setScheduleVisible((v) => !v)}
+          title={scheduleVisible ? "Hide schedule summary" : "Show schedule summary"}
+          type="button"
+        >
+          <span className="scheduleToggleBtn__icon">
+            {scheduleVisible ? "▲" : "▼"}
+          </span>
+          {scheduleVisible ? "Hide Schedule" : "Show Schedule"}
+        </button>
       </div>
+
+      {scheduleVisible ? (
+        <div className="schFreeStrip" aria-label="Weekly free time gaps">
+          {WEEKDAY_ORDER.map((day) => {
+            const slots = freeSlotsByDay[day];
+            const longestSlot = longestFreeSlotByDay[day];
+            const isAllDayFree =
+              slots.length === 1 &&
+              slots[0].start === GRID_START_OF_DAY &&
+              slots[0].end === GRID_END_OF_DAY;
+
+            return (
+              <div key={day} className="schFreeCard">
+                <div className="schFreeCard__top">
+                  <span className="schFreeCard__day">{day}</span>
+                  <span className="schFreeCard__meta">
+                    {slots.length === 0
+                      ? "No 30+ min gaps"
+                      : isAllDayFree
+                        ? "Free all day"
+                        : `${slots.length} ${slots.length === 1 ? "gap" : "gaps"}`}
+                  </span>
+                </div>
+
+                {longestSlot && !isAllDayFree ? (
+                  <div className="schFreeCard__summary">
+                    Longest: {formatDuration(longestSlot.start, longestSlot.end)}
+                  </div>
+                ) : null}
+
+                <div className="schFreeCard__slots">
+                  {slots.length === 0 ? (
+                    <span className="schFreeEmpty">
+                      No open block long enough to matter.
+                    </span>
+                  ) : (
+                    slots.map((slot) => (
+                      <span
+                        key={`${day}-${slot.start}-${slot.end}`}
+                        className={`schFreeChip${isAllDayFree ? " isFullDay" : ""}`}
+                      >
+                        {formatTime(slot.start)} - {formatTime(slot.end)}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className="schDays">
         <div className="schDays__corner" />
@@ -633,17 +620,15 @@ export function ScheduleGrid({
 
       <div className="schGrid" ref={gridRef} style={{ height: gridHeight }}>
         <div className="schTimes">
-          {/* FIX: prefixed key with "time-" to avoid collision with "hline-" keys below */}
           {hourMarks.map((m, index) => (
-  <div
-    key={`time-${m.label}-${index}`}
-    className="schTimes__mark"
-    style={{ top: m.at }}
-  >
-    {m.label}
-  </div>
-))}
-
+            <div
+              key={`time-${m.label}-${index}`}
+              className="schTimes__mark"
+              style={{ top: m.at }}
+            >
+              {m.label}
+            </div>
+          ))}
         </div>
 
         <div className="schCanvas" style={{ height: gridHeight }}>
@@ -654,13 +639,12 @@ export function ScheduleGrid({
           </div>
           {hourMarks.map((m) => (
             <div
-              key={m.label}
+              key={`hline-${m.label}`}
               className="schCanvas__hline"
               style={{ top: m.at }}
             />
           ))}
 
-          {/* Preview blocks */}
           {previewBlocks.map((b, idx) => {
             const dayIndex = DAYS.findIndex((d) => d.key === b.day);
             if (dayIndex === -1) return null;
@@ -721,7 +705,6 @@ export function ScheduleGrid({
             );
           })}
 
-          {/* Scheduled blocks */}
           {blocks
             .filter((b) => !b.hidden)
             .map((b) => {
@@ -815,7 +798,6 @@ export function ScheduleGrid({
         </div>
       </div>
 
-      {/* Right-click color picker */}
       {contextMenu && (
         <div
           ref={contextMenuRef}
@@ -832,7 +814,6 @@ export function ScheduleGrid({
             minWidth: "180px",
           }}
         >
-          {/* Tab switcher */}
           <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
             {(["picker", "rgb"] as const).map((tab) => (
               <button
@@ -864,9 +845,9 @@ export function ScheduleGrid({
               const c2 = val * sat;
               const x2 = c2 * (1 - Math.abs(((hue / 60) % 2) - 1));
               const m2 = val - c2;
-              let rr = 0,
-                gg = 0,
-                bb = 0;
+              let rr = 0;
+              let gg = 0;
+              let bb = 0;
               if (hue < 60) {
                 rr = c2;
                 gg = x2;
@@ -1129,7 +1110,7 @@ export function ScheduleGrid({
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             {(() => {
               const course = courses.find(
-                (c) => c.id === contextMenu!.courseId,
+                (c) => c.id === contextMenu.courseId,
               );
               if (!course) return null;
               return (
@@ -1181,7 +1162,6 @@ export function ScheduleGrid({
         </div>
       )}
 
-      {/* Review Modal */}
       {reviewModal && (
         <div
           style={{
