@@ -9,7 +9,7 @@ import {
 import { mapApiCoursesToCourses } from '../utils/courseApi.ts';
 import { type FreeSlot, timeToMinutes, type WeekdayKey } from '../utils/schedule.ts';
 
-const API_ROOT = 'http://localhost:3001';
+const API_ROOT = import.meta.env.VITE_API_URL || "";
 const START_OF_DAY = '08:00';
 const END_OF_DAY = '21:00';
 const ROOM_SORTER = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -272,12 +272,13 @@ export default function EmptyClasses() {
   return (
     <div className="emptyClassesShell">
       <TopNav
-        appName="UniFlow"
+        appName="AUB Course Planner"
         semesterId={semesterId}
         semesters={semesters}
         semesterLabel={semesterLabel}
         lastUpdatedText={selectedBuilding ? `Viewing ${selectedBuilding}` : 'Room availability'}
         onSemesterChange={setSemesterId}
+        scheduledCourses={[]}
         activePage="empty-classes"
       />
 

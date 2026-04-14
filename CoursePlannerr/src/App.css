@@ -30,6 +30,32 @@
   }
 }
 
+body.light {
+  --bg: #f0f2f5;
+  --panel: #ffffff;
+  --panel2: #f8f9fb;
+  --border: #dde1e7;
+  --text: #1a1f2e;
+  --muted: #6b7280;
+  --accent: #2b6cff;
+  --danger: #ff5a5f;
+}
+
+body.light .topNav { background: #ffffff; }
+body.light .rightPanel__top { background: #ffffff; }
+body.light .sideTabs { background: #ffffff; }
+body.light .schDays { background: #f8f9fb; }
+body.light .schCanvas__hline { border-top: 1px solid rgba(0,0,0,0.06); }
+body.light .courseBlock { border: 1px solid rgba(0,0,0,0.12); }
+body.light .resultItem { background: #ffffff; }
+body.light .miniStats__item { background: #ffffff; }
+body.light .sessionCard { background: rgba(0,0,0,0.03); }
+body.light .emptyState { border-color: rgba(0,0,0,0.15); background: rgba(0,0,0,0.02); }
+body.light .topNav__link:hover { background: rgba(0,0,0,0.05); }
+body.light .topNav__logout:hover { background: rgba(0,0,0,0.05); }
+body.light .schTab.isActive { background: rgba(0,0,0,0.06); }
+body.light .sideTabs__tab.isActive { background: rgba(0,0,0,0.06); }
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; }
 
