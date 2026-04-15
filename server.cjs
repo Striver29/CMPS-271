@@ -175,7 +175,7 @@
 // require("dotenv").config();
 
 // const { createClient } = require("@supabase/supabase-js");
-// const { HfInference } = require("@huggingface/inference");
+// const { InferenceClient } = require("@huggingface/inference");
 
 // const app = express();
 
@@ -190,7 +190,7 @@
 //   process.env.SUPABASE_ANON_KEY
 // );
 
-// const hf = new HfInference(process.env.HF_TOKEN);
+// const hf = new InferenceClient(process.env.HF_TOKEN);
 
 // async function moderateText(text) {
 //   if (!text || text.trim().length === 0) return true;
@@ -385,14 +385,25 @@ const cors = require("cors");
 require("dotenv").config();
 
 const { createClient } = require("@supabase/supabase-js");
-const { HfInference } = require("@huggingface/inference");
+const { InferenceClient } = require("@huggingface/inference");
 const Groq = require("groq-sdk");
 
 const app = express();
+const PORT = process.env.PORT || 3001;
 
-app.use(cors({
-  origin:  '*'
-}));
+const corsOptions = {
+  origin: [
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "https://cmps-271.vercel.app",
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(express.json());
 
@@ -401,7 +412,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-const hf = new HfInference(process.env.HF_TOKEN);
+const hf = new InferenceClient(process.env.HF_TOKEN);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const SUMMARY_STOP_WORDS = new Set([
@@ -818,19 +829,51 @@ function buildProfessorSummary(professor, ratings) {
 }
 
 async function moderateText(text) {
-  if (!text || text.trim().length === 0) return true;
+  if (!text || text.trim().length === 0) return { allowed: true };
+
+  if (!process.env.HF_TOKEN) {
+    console.error("Moderation error: HF_TOKEN is not set.");
+    return { allowed: false, unavailable: true };
+  }
+
   try {
     const result = await hf.textClassification({
       model: "unitary/toxic-bert",
       inputs: text,
     });
-    const top = result[0];
-    if (top.label === "toxic" && top.score > 0.7) return false;
-    return true;
+
+    const classifications = Array.isArray(result?.[0]) ? result[0] : result;
+    const unsafeLabels = new Set([
+      "toxic",
+      "severe_toxic",
+      "obscene",
+      "threat",
+      "insult",
+      "identity_hate",
+    ]);
+
+    const flagged = (classifications || []).some((item) =>
+      unsafeLabels.has(String(item.label || "").toLowerCase()) &&
+      Number(item.score || 0) > 0.7
+    );
+
+    return { allowed: !flagged };
   } catch (err) {
     console.error("Moderation error:", err);
-    return true;
+    return { allowed: false, unavailable: true };
   }
+}
+
+function sendModerationRejection(res, moderation) {
+  if (moderation?.unavailable) {
+    return res.status(503).json({
+      error: "Review moderation is temporarily unavailable. Please try again later.",
+    });
+  }
+
+  return res.status(400).json({
+    error: "Review contains inappropriate content and was not submitted.",
+  });
 }
 
 app.get("/api/terms", async (req, res) => {
@@ -892,9 +935,9 @@ app.get("/api/ratings/course/:department/:courseNumber", async (req, res) => {
 app.post("/api/ratings/course", async (req, res) => {
   const { user_id, department, course_number, rating, difficulty, review } = req.body;
 
-  const allowed = await moderateText(review);
-  if (!allowed) {
-    return res.status(400).json({ error: "Review contains inappropriate content and was not submitted." });
+  const moderation = await moderateText(review);
+  if (!moderation.allowed) {
+    return sendModerationRejection(res, moderation);
   }
 
   const { data, error } = await supabase
@@ -928,9 +971,9 @@ app.get("/api/ratings/professor/:professorId", async (req, res) => {
 app.post("/api/ratings/professor", async (req, res) => {
   const { user_id, professor_id, department, course_number, rating, review } = req.body;
 
-  const allowed = await moderateText(review);
-  if (!allowed) {
-    return res.status(400).json({ error: "Review contains inappropriate content and was not submitted." });
+  const moderation = await moderateText(review);
+  if (!moderation.allowed) {
+    return sendModerationRejection(res, moderation);
   }
 
   const { data, error } = await supabase
@@ -968,6 +1011,29 @@ app.get("/api/professors", async (req, res) => {
   const { data, error } = await query.limit(20);
   if (error) return res.status(500).json(error);
   res.json(data);
+});
+
+app.get("/api/professors/:professorId/courses", async (req, res) => {
+  const { professorId } = req.params;
+
+  const { data, error } = await supabase
+    .from("courses")
+    .select("department, course_number, title")
+    .eq("professor_id", professorId)
+    .order("department", { ascending: true })
+    .order("course_number", { ascending: true });
+
+  if (error) return res.status(500).json(error);
+
+  const seen = new Set();
+  const unique = (data || []).filter((course) => {
+    const key = `${course.department}-${course.course_number}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  res.json(unique);
 });
 
 app.get("/api/courses/search", async (req, res) => {
@@ -1115,8 +1181,8 @@ If the student is just chatting (not asking for a schedule), respond in this for
 });
 
 console.log("About to listen...");
-app.listen(3001, () => {
-  console.log("Server running on http://localhost:3001");
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 process.stdin.resume();

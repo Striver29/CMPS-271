@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
-const API = "https://cmps-271-1.onrender.com";
+const API = import.meta.env.VITE_API_URL || "";
 console.log("API URL:", API);
 
 type Tab = "courses" | "professors";
@@ -1443,6 +1443,10 @@ export default function Reviews() {
           setSubmitError(
             "Your review contains inappropriate content and was not submitted.",
           );
+        else if (res.status === 503)
+          setSubmitError(
+            "Review moderation is temporarily unavailable. Please try again later.",
+          );
         else setSubmitError("Something went wrong. Please try again.");
         return;
       }
@@ -1493,6 +1497,10 @@ export default function Reviews() {
         else if (res.status === 400)
           setSubmitError(
             "Your review contains inappropriate content and was not submitted.",
+          );
+        else if (res.status === 503)
+          setSubmitError(
+            "Review moderation is temporarily unavailable. Please try again later.",
           );
         else setSubmitError("Something went wrong. Please try again.");
         return;

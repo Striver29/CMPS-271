@@ -637,9 +637,9 @@ export function ScheduleGrid({
               <div key={d.key} className="schCanvas__col" />
             ))}
           </div>
-          {hourMarks.map((m) => (
+          {hourMarks.map((m, index) => (
             <div
-              key={`hline-${m.label}`}
+              key={`hline-${m.label}-${index}`}
               className="schCanvas__hline"
               style={{ top: m.at }}
             />
