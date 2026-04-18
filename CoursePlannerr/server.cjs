@@ -171,6 +171,7 @@
 console.log("File started");
 const express = require("express");
 const cors = require("cors");
+const zlib = require("zlib");
 require("dotenv").config();
 
 const { createClient } = require("@supabase/supabase-js");
@@ -201,6 +202,42 @@ const supabase = createClient(
 );
 
 const hf = new InferenceClient(process.env.HF_TOKEN);
+const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
+const responseCache = new Map();
+
+function getCachedResponse(key) {
+  const cached = responseCache.get(key);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    return null;
+  }
+  return cached.data;
+}
+
+function setCachedResponse(key, data, ttl = RESPONSE_CACHE_TTL_MS) {
+  responseCache.set(key, {
+    data,
+    expiresAt: Date.now() + ttl
+  });
+}
+
+function sendJson(req, res, data) {
+  const payload = Buffer.from(JSON.stringify(data));
+  const acceptsGzip = /\bgzip\b/.test(String(req.headers["accept-encoding"] || ""));
+
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Vary", "Accept-Encoding");
+
+  if (!acceptsGzip || payload.length < 1024) {
+    return res.end(payload);
+  }
+
+  zlib.gzip(payload, (error, compressed) => {
+    if (error) return res.end(payload);
+    res.setHeader("Content-Encoding", "gzip");
+    res.end(compressed);
+  });
+}
 
 const SUMMARY_STOP_WORDS = new Set([
   "a", "an", "and", "about", "all", "any", "are", "as", "at", "be", "best",
@@ -1166,6 +1203,9 @@ function sendModerationRejection(res, moderation) {
 }
 
 app.get("/api/terms", async (req, res) => {
+  const cached = getCachedResponse("terms");
+  if (cached) return sendJson(req, res, cached);
+
   const { data, error } = await supabase
     .from("terms")
     .select("*")
@@ -1178,11 +1218,20 @@ app.get("/api/terms", async (req, res) => {
     description: t.description.replace(" (View Only)", "").trim()
   }));
 
-  res.json(cleaned);
+  setCachedResponse("terms", cleaned);
+  sendJson(req, res, cleaned);
 });
 
 app.get("/api/courses", async (req, res) => {
   const { term, search } = req.query;
+  const cacheKey = search
+    ? null
+    : `courses:${term || "none"}`;
+
+  if (cacheKey) {
+    const cached = getCachedResponse(cacheKey);
+    if (cached) return sendJson(req, res, cached);
+  }
 
   let query = supabase
     .from("courses")
@@ -1197,7 +1246,8 @@ app.get("/api/courses", async (req, res) => {
 
   const { data, error } = await query.range(0, 5000);
   if (error) return res.status(500).json(error);
-  res.json(data);
+  if (cacheKey) setCachedResponse(cacheKey, data || []);
+  sendJson(req, res, data);
 });
 
 // Get course ratings

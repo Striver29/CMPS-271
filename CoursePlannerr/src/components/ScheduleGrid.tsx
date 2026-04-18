@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { Course, Day, Meeting } from "../types";
-import jsPDF from "jspdf";
 import {
   expandCoursesToMeetingSlots,
   findFreeSlots,
@@ -310,7 +309,8 @@ export function ScheduleGrid({
     handlePickColor(hex);
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
+    const { default: jsPDF } = await import("jspdf");
     const isLight = document.body.classList.contains("light");
 
     const BG = isLight ? { r: 240, g: 242, b: 245 } : { r: 15, g: 18, b: 23 };

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { Suspense, lazy, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
 import type { Course } from "./types";
@@ -6,20 +6,89 @@ import { TopNav } from "./components/TopNav";
 import { LeftInfoPanel } from "./components/LeftInfoPanel";
 import { ScheduleGrid } from "./components/ScheduleGrid";
 import { RightSearchPanel } from "./components/RightSearchPanel";
-import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Reviews from "./pages/Reviews";
 import { supabase } from "./supabaseClient.ts";
-import UpdatePassword from "./pages/UpdatePassword.tsx";
 import { AIScheduler } from "./components/AiScheduler.tsx";
-import GPAPage from "./pages/GPAPage";
-import GradeCalculator from "./components/GradeCalculator";
-import AdminPortal from "./pages/AdminPortal";
 import AdminRoute from "./components/AdminRoute";
-import EmptyClasses from "./pages/EmptyClasses.tsx";
 import { mapApiCoursesToCourses } from "./utils/courseApi.ts";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const COURSE_CACHE_PREFIX = "uniflow:courses:";
+const TERMS_CACHE_KEY = "uniflow:terms";
+const EMPTY_COURSES: Course[] = [];
+
+type TermRecord = {
+  code: string;
+  description: string;
+  is_current?: boolean;
+};
+
+type TermOption = {
+  id: string;
+  label: string;
+};
+
+type RawCourse = Record<string, unknown>;
+
+type SavedScheduleRow = {
+  slot: number;
+  courses: Course[] | null;
+  colors: Record<string, string> | null;
+};
+
+type FavoriteRow = {
+  course: Course | null;
+};
+
+const Login = lazy(() => import("./pages/Login"));
+const Reviews = lazy(() => import("./pages/Reviews"));
+const EmptyClasses = lazy(() => import("./pages/EmptyClasses.tsx"));
+const UpdatePassword = lazy(() => import("./pages/UpdatePassword.tsx"));
+const GPAPage = lazy(() => import("./pages/GPAPage"));
+const GradeCalculator = lazy(() => import("./components/GradeCalculator"));
+const AdminPortal = lazy(() => import("./pages/AdminPortal"));
+
+function readCachedJson<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedJson(key: string, value: unknown) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage can fail in private mode or if quota is exhausted. The app still works without it.
+  }
+}
+
+function formatTermOptions(terms: TermRecord[]): TermOption[] {
+  return terms.map((term) => ({
+    id: term.code,
+    label: term.description,
+  }));
+}
+
+function PageFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--bg)",
+        color: "var(--muted)",
+        fontSize: 14,
+      }}
+    >
+      Loading...
+    </div>
+  );
+}
 
 const COURSE_COLORS = [
   "#1a5fa8",
@@ -36,11 +105,17 @@ const COURSE_COLORS = [
 
 export default function App() {
   const appName = "Uniflow";
-
-  const [semesters, setSemesters] = useState<{ id: string; label: string }[]>(
+  const initialTerms = useMemo(
+    () => readCachedJson<TermRecord[]>(TERMS_CACHE_KEY) ?? [],
     [],
   );
-  const [semesterId, setSemesterId] = useState("");
+
+  const [semesters, setSemesters] = useState<TermOption[]>(() =>
+    formatTermOptions(initialTerms),
+  );
+  const [semesterId, setSemesterId] = useState(
+    () => initialTerms.find((term) => term.is_current)?.code ?? "",
+  );
   const semesterLabel = useMemo(
     () => semesters.find((s) => s.id === semesterId)?.label ?? "Semester",
     [semesterId, semesters],
@@ -49,15 +124,10 @@ export default function App() {
   useEffect(() => {
     fetch(`${API_URL}/api/terms`)
       .then((res) => res.json())
-      .then((data) => {
-        const formatted = data.map(
-          (t: { code: string; description: string }) => ({
-            id: t.code,
-            label: t.description,
-          }),
-        );
-        setSemesters(formatted);
-        const current = data.find((t: any) => t.is_current);
+      .then((data: TermRecord[]) => {
+        writeCachedJson(TERMS_CACHE_KEY, data);
+        setSemesters(formatTermOptions(data));
+        const current = data.find((term) => term.is_current);
         if (current) setSemesterId(current.code);
       })
       .catch(() => setSemesters([]));
@@ -67,13 +137,36 @@ export default function App() {
 
   useEffect(() => {
     if (!semesterId) return;
-    setAllCourses([]);
-    fetch(`${API_URL}/api/courses?term=${semesterId}`)
+    const cacheKey = `${COURSE_CACHE_PREFIX}${semesterId}`;
+    const cachedCourses = readCachedJson<RawCourse[]>(cacheKey);
+    let cancelled = false;
+
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setAllCourses(
+        cachedCourses?.length ? mapApiCoursesToCourses(cachedCourses) : [],
+      );
+    });
+
+    const controller = new AbortController();
+    fetch(`${API_URL}/api/courses?term=${semesterId}`, {
+      signal: controller.signal,
+    })
       .then((res) => res.json())
-      .then((data) => {
+      .then((data: RawCourse[]) => {
+        writeCachedJson(cacheKey, data);
         setAllCourses(mapApiCoursesToCourses(data));
       })
-      .catch(() => setAllCourses([]));
+      .catch((error) => {
+        if (error?.name !== "AbortError" && !cachedCourses?.length) {
+          setAllCourses([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [semesterId]);
 
   const [activeLeftTab, setActiveLeftTab] = useState<
@@ -110,11 +203,11 @@ export default function App() {
       .then(({ data }) => {
         const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
         const loadedColors = new Map<string, string>();
-        (data ?? []).forEach((row: any) => {
-          loaded[row.slot] = row.courses;
+        ((data ?? []) as SavedScheduleRow[]).forEach((row) => {
+          loaded[row.slot] = row.courses ?? [];
           if (row.colors) {
             Object.entries(row.colors).forEach(([id, color]) => {
-              loadedColors.set(id, color as string);
+              loadedColors.set(id, color);
             });
           }
         });
@@ -131,7 +224,11 @@ export default function App() {
       .eq("user_id", userId)
       .then(({ data }) => {
         if (!data) return;
-        setFavorites(data.map((row: any) => row.course));
+        setFavorites(
+          (data as FavoriteRow[])
+            .map((row) => row.course)
+            .filter((course): course is Course => Boolean(course)),
+        );
       });
   }, [userId]);
 
@@ -177,7 +274,10 @@ export default function App() {
     [userId, favorites],
   );
 
-  const scheduled = schedules[activeSlot] ?? [];
+  const scheduled = useMemo(
+    () => schedules[activeSlot] ?? EMPTY_COURSES,
+    [schedules, activeSlot],
+  );
 
   const toggleSchedule = (course: Course) => {
     const current = schedules[activeSlot];
@@ -206,20 +306,39 @@ export default function App() {
   const [courseDifficulties, setCourseDifficulties] = useState<
     Record<string, number>
   >({});
+  const courseDifficultiesRef = useRef(courseDifficulties);
+  const difficultyRequestsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    courseDifficultiesRef.current = courseDifficulties;
+  }, [courseDifficulties]);
 
   useEffect(() => {
     scheduled.forEach((c) => {
       const [dept, num] = c.code.split(" ");
-      if (courseDifficulties[c.code] !== undefined) return;
+      if (
+        courseDifficultiesRef.current[c.code] !== undefined ||
+        difficultyRequestsRef.current.has(c.code)
+      ) {
+        return;
+      }
+      difficultyRequestsRef.current.add(c.code);
       fetch(`${API_URL}/api/ratings/course/${dept}/${num}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.averages?.difficulty > 0) {
-            setCourseDifficulties((prev) => ({
-              ...prev,
-              [c.code]: parseFloat(data.averages.difficulty),
-            }));
+            setCourseDifficulties((prev) => {
+              if (prev[c.code] !== undefined) return prev;
+              return {
+                ...prev,
+                [c.code]: parseFloat(data.averages.difficulty),
+              };
+            });
           }
+          difficultyRequestsRef.current.delete(c.code);
+        })
+        .catch(() => {
+          difficultyRequestsRef.current.delete(c.code);
         });
     });
   }, [scheduled]);
@@ -334,36 +453,38 @@ export default function App() {
   );
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<ProtectedRoute>{mainApp}</ProtectedRoute>} />
-      <Route
-        path="/reviews"
-        element={
-          <ProtectedRoute>
-            <Reviews />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/empty-classes"
-        element={
-          <ProtectedRoute>
-            <EmptyClasses />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/update-password" element={<UpdatePassword />} />
-      <Route path="/gpa" element={<GPAPage />} />
-      <Route path="/grade-calculator" element={<GradeCalculator />} />
-      <Route
-        path="/admin"
-        element={
-          <AdminRoute>
-            <AdminPortal />
-          </AdminRoute>
-        }
-      />
-    </Routes>
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<ProtectedRoute>{mainApp}</ProtectedRoute>} />
+        <Route
+          path="/reviews"
+          element={
+            <ProtectedRoute>
+              <Reviews />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empty-classes"
+          element={
+            <ProtectedRoute>
+              <EmptyClasses />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/update-password" element={<UpdatePassword />} />
+        <Route path="/gpa" element={<GPAPage />} />
+        <Route path="/grade-calculator" element={<GradeCalculator />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPortal />
+            </AdminRoute>
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }
