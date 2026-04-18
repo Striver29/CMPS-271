@@ -265,10 +265,14 @@ export default function App() {
   };
 
   const handleApplyAISchedule = (courses: Course[]) => {
-    const newSchedules = { ...schedules, [activeSlot]: courses };
+    const current = schedules[activeSlot] ?? [];
+    const currentIds = new Set(current.map((course) => course.id));
+    const coursesToAdd = courses.filter((course) => !currentIds.has(course.id));
+    const mergedCourses = [...current, ...coursesToAdd];
+    const newSchedules = { ...schedules, [activeSlot]: mergedCourses };
     setSchedules(newSchedules);
-    saveSlot(activeSlot, courses);
-    courses.forEach((c) => {
+    saveSlot(activeSlot, mergedCourses);
+    coursesToAdd.forEach((c) => {
       const alreadyFav = favorites.some((f) => f.id === c.id);
       if (!alreadyFav) toggleFavorite(c);
     });
@@ -322,6 +326,7 @@ export default function App() {
       </div>
       <AIScheduler
         allCourses={allCourses}
+        scheduledCourses={scheduled}
         onApplySchedule={handleApplyAISchedule}
         activeSlot={activeSlot}
       />

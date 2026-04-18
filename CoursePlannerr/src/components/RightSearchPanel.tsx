@@ -30,6 +30,36 @@ interface CourseRating {
   created_at: string;
 }
 
+function buildCourseSummary(courseCode: string, ratings: CourseRating[]) {
+  if (!ratings.length) return null;
+
+  const average =
+    ratings.reduce((sum, rating) => sum + Number(rating.rating || 0), 0) /
+    ratings.length;
+  const writtenCount = ratings.filter((rating) => rating.review?.trim()).length;
+  const difficultyValues = ratings
+    .map((rating) => Number(rating.difficulty || 0))
+    .filter((difficulty) => difficulty > 0);
+  const difficultyAverage = difficultyValues.length
+    ? difficultyValues.reduce((sum, difficulty) => sum + difficulty, 0) /
+      difficultyValues.length
+    : null;
+  const positive = ratings.filter((rating) => Number(rating.rating) >= 4).length;
+  const negative = ratings.filter((rating) => Number(rating.rating) <= 2).length;
+  const tone =
+    positive >= negative + 2
+      ? "mostly positive"
+      : negative >= positive + 2
+        ? "mostly critical"
+        : "mixed";
+  const difficultyText =
+    difficultyAverage !== null
+      ? ` Students rate the difficulty around ${difficultyAverage.toFixed(1)}/5.`
+      : "";
+
+  return `Based on ${writtenCount} written ${writtenCount === 1 ? "review" : "reviews"} and ${ratings.length} total ${ratings.length === 1 ? "rating" : "ratings"} for ${courseCode}, the overall feedback is ${tone} with an average rating of ${average.toFixed(1)}/5.${difficultyText} This summary only reflects reviews that students submitted in the app.`;
+}
+
 interface Syllabus {
   id: string;
   course_code: string;
@@ -62,6 +92,7 @@ export function RightSearchPanel({
     difficulty: string;
     count: number;
   } | null>(null);
+  const [modalSummary, setModalSummary] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
@@ -77,12 +108,17 @@ export function RightSearchPanel({
     setSyllabi([]);
     setUploadError(null);
     setUploadSuccess(false);
+    setModalSummary(null);
     const [dept, num] = viewModal.course.code.split(" ");
     fetch(`${API}/api/ratings/course/${dept}/${num}`)
       .then((r) => r.json())
       .then((data) => {
-        setModalRatings(data.ratings || []);
+        const ratings = data.ratings || [];
+        setModalRatings(ratings);
         setModalAvg(data.averages || null);
+        setModalSummary(
+          data.summary || buildCourseSummary(viewModal.course.code, ratings),
+        );
       })
       .finally(() => setModalLoading(false));
   }, [viewModal]);
@@ -477,6 +513,40 @@ export function RightSearchPanel({
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {modalSummary && modalAvg && modalAvg.count > 0 && (
+                    <div
+                      style={{
+                        backgroundColor: "var(--bg)",
+                        borderRadius: "8px",
+                        padding: "12px",
+                        border: "1px solid var(--border)",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 800,
+                          color: "var(--text)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        AI Review Summary
+                      </div>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "var(--text)",
+                          fontSize: "13px",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {modalSummary}
+                      </p>
                     </div>
                   )}
                   {modalLoading ? (

@@ -193,7 +193,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -441,6 +441,27 @@ async function fetchAllProfessors() {
   return { data: allProfessors, error: null };
 }
 
+let professorSearchCache = {
+  data: null,
+  expiresAt: 0
+};
+
+async function fetchCachedProfessors() {
+  if (professorSearchCache.data && professorSearchCache.expiresAt > Date.now()) {
+    return { data: professorSearchCache.data, error: null };
+  }
+
+  const result = await fetchAllProfessors();
+  if (!result.error && result.data) {
+    professorSearchCache = {
+      data: result.data,
+      expiresAt: Date.now() + (5 * 60 * 1000)
+    };
+  }
+
+  return result;
+}
+
 function scoreProfessorMatch(fullName, normalizedMessage, tokens) {
   const nameTokens = getProfessorNameTokens(fullName);
   if (!nameTokens.length) return 0;
@@ -624,6 +645,73 @@ function buildProfessorSummary(professor, ratings) {
   return summary.join(" ");
 }
 
+function buildCourseSummary(courseLabel, ratings) {
+  const totalRatings = ratings.length;
+
+  if (!totalRatings) {
+    return `I couldn't find any submitted reviews for ${courseLabel} yet.`;
+  }
+
+  const averageRating = (
+    ratings.reduce((sum, rating) => sum + Number(rating.rating || 0), 0) / totalRatings
+  ).toFixed(1);
+  const difficultyValues = ratings
+    .map(rating => Number(rating.difficulty || 0))
+    .filter(value => value > 0);
+  const averageDifficulty = difficultyValues.length
+    ? (difficultyValues.reduce((sum, value) => sum + value, 0) / difficultyValues.length).toFixed(1)
+    : null;
+  const writtenRatings = ratings.filter(rating =>
+    typeof rating.review === "string" && rating.review.trim().length > 0
+  );
+
+  if (!writtenRatings.length) {
+    const difficultyText = averageDifficulty
+      ? ` and an average difficulty of ${averageDifficulty}/5`
+      : "";
+    return `${courseLabel} has ${totalRatings} ${pluralize(totalRatings, "rating")} averaging ${averageRating}/5${difficultyText}, but none of those submissions include written comments yet.`;
+  }
+
+  const positiveCount = ratings.filter(rating => Number(rating.rating) >= 4).length;
+  const negativeCount = ratings.filter(rating => Number(rating.rating) <= 2).length;
+
+  let overallTone = "mixed";
+  if (positiveCount >= negativeCount + 2) overallTone = "mostly positive";
+  if (negativeCount >= positiveCount + 2) overallTone = "mostly critical";
+
+  const positiveThemes = getTopThemeLabels(
+    writtenRatings.filter(rating => Number(rating.rating) >= 4),
+    POSITIVE_THEMES
+  );
+  const concernThemes = getTopThemeLabels(
+    writtenRatings.filter(rating => Number(rating.rating) <= 3),
+    CONCERN_THEMES
+  );
+
+  const summary = [
+    `Based on ${writtenRatings.length} written ${pluralize(writtenRatings.length, "review")} and ${totalRatings} total ${pluralize(totalRatings, "rating")} for ${courseLabel}, the overall feedback is ${overallTone} with an average rating of ${averageRating}/5.`
+  ];
+
+  if (averageDifficulty) {
+    summary.push(`Students rate the difficulty around ${averageDifficulty}/5.`);
+  }
+
+  if (positiveThemes.length) {
+    summary.push(`Students most often praise ${joinList(positiveThemes)}.`);
+  } else if (positiveCount > negativeCount) {
+    summary.push("The written comments lean positive overall, even though one compliment does not dominate.");
+  }
+
+  if (concernThemes.length) {
+    summary.push(`The recurring concerns are ${joinList(concernThemes)}.`);
+  } else if (negativeCount > 0) {
+    summary.push("Some reviews mention downsides, but they do not cluster around one repeated complaint.");
+  }
+
+  summary.push("This summary only reflects reviews that students submitted in the app.");
+  return summary.join(" ");
+}
+
 function toMinutes(time) {
   const [hours, minutes] = String(time).split(":").map(Number);
   return (hours * 60) + minutes;
@@ -747,7 +835,7 @@ function scoreBundle(bundle, preferences, difficulties) {
   }
 
   bundle.forEach(course => {
-    if (course.capacity?.limit > 0 && course.capacity.enrolled < course.capacity.limit) {
+    if (sectionHasOpenSeat(course)) {
       score += 0.5;
     }
 
@@ -783,13 +871,14 @@ function isBetterSchedule(candidate, best) {
 
 function formatBundleLabel(bundle) {
   const courseCode = bundle[0]?.code ?? "Course";
+  const instructor = bundle.find(section => section.instructor)?.instructor;
   const sections = bundle.map(section => (
     section.scheduleType && String(section.scheduleType).toLowerCase() !== "lecture"
       ? `${section.section} (${section.scheduleType})`
       : section.section
   ));
 
-  return `${courseCode}: ${sections.join(" + ")}`;
+  return `${courseCode}: ${sections.join(" + ")}${instructor ? ` with ${instructor}` : ""}`;
 }
 
 function averageSelectedDifficulty(selectedBundles, difficulties) {
@@ -805,15 +894,97 @@ function averageSelectedDifficulty(selectedBundles, difficulties) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function buildScheduleSummary(selectedBundles, requestedCount, preferences, difficulties) {
+function sectionSeatsRemaining(section) {
+  if (Number.isFinite(Number(section?.seatsRemaining))) {
+    return Number(section.seatsRemaining);
+  }
+
+  const limit = Number(section?.capacity?.limit || 0);
+  const enrolled = Number(section?.capacity?.enrolled || 0);
+  return limit > 0 ? Math.max(0, limit - enrolled) : null;
+}
+
+function sectionHasOpenSeat(section) {
+  const seatsRemaining = sectionSeatsRemaining(section);
+  return seatsRemaining === null || seatsRemaining > 0;
+}
+
+function bundleHasFullSection(bundle) {
+  return bundle.some(section => !sectionHasOpenSeat(section));
+}
+
+function formatBundleSeatStatus(bundle) {
+  const label = formatBundleLabel(bundle);
+  const seatCounts = bundle
+    .map(sectionSeatsRemaining)
+    .filter(count => count !== null);
+
+  if (!seatCounts.length) {
+    return `${label} has unknown seat availability`;
+  }
+
+  const lowestSeats = Math.min(...seatCounts);
+  return `${label} has ${lowestSeats} ${pluralize(lowestSeats, "seat")} remaining`;
+}
+
+function buildScheduleSummary(selectedBundles, requestedCount, preferences, difficulties, options = {}) {
+  const suggestionLimit = Number(options.suggestionLimit);
+  const isSuggestionMode = Number.isFinite(suggestionLimit) && suggestionLimit > 0;
+  const matchedAttributes = Array.isArray(options.matchedAttributes)
+    ? options.matchedAttributes.filter(Boolean)
+    : [];
+  const matchedDepartments = Array.isArray(options.matchedDepartments)
+    ? options.matchedDepartments.filter(Boolean)
+    : [];
+  const matchedInstructors = Array.isArray(options.matchedInstructors)
+    ? options.matchedInstructors.filter(Boolean)
+    : [];
+
   if (!requestedCount) {
+    if (isSuggestionMode) {
+      const departmentText = matchedDepartments.length
+        ? ` in ${joinList(matchedDepartments)}`
+        : "";
+      const instructorText = matchedInstructors.length
+        ? ` taught by ${joinList(matchedInstructors)}`
+        : "";
+      return matchedAttributes.length
+        ? `I couldn't find any current-semester sections with ${joinList(matchedAttributes)}${departmentText}${instructorText}.`
+        : matchedInstructors.length
+          ? `I couldn't find any current-semester sections taught by ${joinList(matchedInstructors)}${departmentText}.`
+          : "I couldn't match that request to a current-semester course attribute. Try the exact attribute name from a course card, like Humanities II or Quantitative Thought.";
+    }
+
     return 'I can help in two ways: build a schedule from course codes, or summarize professor reviews. Try "CMPS 271, MATH 201, no Fridays" or "Summarize the reviews for Professor Jane Doe."';
   }
 
   const selectedCount = selectedBundles.length;
+  const targetCount = isSuggestionMode
+    ? Math.min(Math.max(1, Math.floor(suggestionLimit)), requestedCount)
+    : requestedCount;
   const summary = [];
 
-  if (selectedCount === requestedCount) {
+  if (isSuggestionMode) {
+    const departmentText = matchedDepartments.length
+      ? ` in ${joinList(matchedDepartments)}`
+      : "";
+    const instructorText = matchedInstructors.length
+      ? ` taught by ${joinList(matchedInstructors)}`
+      : "";
+    const attributeText = matchedAttributes.length
+      ? ` with ${joinList(matchedAttributes)}${departmentText}${instructorText}`
+      : matchedInstructors.length
+        ? ` taught by ${joinList(matchedInstructors)}${departmentText}`
+        : " matching your request";
+
+    if (selectedCount >= targetCount) {
+      summary.push(`I found ${selectedCount} ${pluralize(selectedCount, "course")} ${attributeText} that fit your schedule.`);
+    } else if (selectedCount > 0) {
+      summary.push(`I found ${selectedCount} ${pluralize(selectedCount, "course")} ${attributeText}, but could not fit ${targetCount} without time conflicts.`);
+    } else {
+      summary.push(`I couldn't find a course ${attributeText} that fits the current schedule and preferences.`);
+    }
+  } else if (selectedCount === requestedCount) {
     summary.push(`I found a conflict-free option for all ${requestedCount} requested ${pluralize(requestedCount, "course")}.`);
   } else if (selectedCount > 0) {
     summary.push(`I could fit ${selectedCount} of the ${requestedCount} requested courses without time conflicts.`);
@@ -821,8 +992,19 @@ function buildScheduleSummary(selectedBundles, requestedCount, preferences, diff
     summary.push("I couldn't build a conflict-free schedule from those sections with the current preferences.");
   }
 
+  if (options.existingCount > 0) {
+    summary.push(`I kept your existing ${pluralize(options.existingCount, "course")} in place while checking for conflicts.`);
+  }
+
   if (selectedCount > 0) {
     summary.push(`Selected sections: ${joinList(selectedBundles.map(formatBundleLabel))}.`);
+    summary.push(`Seat availability: ${joinList(selectedBundles.map(formatBundleSeatStatus))}.`);
+  }
+
+  const fullSectionBundles = selectedBundles.filter(bundleHasFullSection);
+  if (fullSectionBundles.length) {
+    const labels = fullSectionBundles.map(formatBundleLabel);
+    summary.push(`${joinList(labels)} ${fullSectionBundles.length === 1 ? "is" : "include sections that are"} currently full, but I still included ${fullSectionBundles.length === 1 ? "it" : "them"} because full seats should not block adding a course to your draft schedule.`);
   }
 
   const priorities = [];
@@ -840,18 +1022,26 @@ function buildScheduleSummary(selectedBundles, requestedCount, preferences, diff
     summary.push(`Estimated difficulty for this set is about ${difficulty.toFixed(1)}/5 based on submitted course ratings.`);
   }
 
-  if (selectedCount < requestedCount) {
+  if (selectedCount < targetCount) {
     summary.push("If you want, ask me to relax a preference or tell me which course matters most and I'll try again.");
   }
 
   return summary.join(" ");
 }
 
-function buildSchedulePlan(message, sections, difficulties) {
+function buildSchedulePlan(message, sections, difficulties, options = {}) {
+  const existingSections = Array.isArray(options.existingSections)
+    ? options.existingSections
+    : [];
+  const summaryOptions = {
+    ...options,
+    existingCount: existingSections.length
+  };
+
   if (!Array.isArray(sections) || !sections.length) {
     return {
       schedule: [],
-      summary: buildScheduleSummary([], 0, { avoidDays: [], preferMorning: false, preferAfternoon: false, preferLateStart: false }, difficulties)
+      summary: buildScheduleSummary([], 0, { avoidDays: [], preferMorning: false, preferAfternoon: false, preferLateStart: false }, difficulties, summaryOptions)
     };
   }
 
@@ -861,6 +1051,10 @@ function buildSchedulePlan(message, sections, difficulties) {
   const orderedCodes = [...requestedCodes].sort((a, b) => (
     (bundlesByCode.get(a)?.length ?? 0) - (bundlesByCode.get(b)?.length ?? 0)
   ));
+  const suggestionLimit = Number(options.suggestionLimit);
+  const maxCourseCount = Number.isFinite(suggestionLimit) && suggestionLimit > 0
+    ? Math.min(Math.max(1, Math.floor(suggestionLimit)), requestedCodes.length)
+    : requestedCodes.length;
 
   let best = { codeCount: 0, score: Number.NEGATIVE_INFINITY, bundles: [] };
 
@@ -871,7 +1065,7 @@ function buildSchedulePlan(message, sections, difficulties) {
       bundles: chosenBundles.slice()
     };
 
-    if (isBetterSchedule(candidate, best)) {
+    if (candidate.codeCount <= maxCourseCount && isBetterSchedule(candidate, best)) {
       best = candidate;
     }
 
@@ -879,8 +1073,12 @@ function buildSchedulePlan(message, sections, difficulties) {
       return;
     }
 
+    if (chosenBundles.length >= maxCourseCount) {
+      return;
+    }
+
     const remaining = orderedCodes.length - index;
-    if (chosenBundles.length + remaining < best.codeCount) {
+    if (Math.min(maxCourseCount, chosenBundles.length + remaining) < best.codeCount) {
       return;
     }
 
@@ -892,6 +1090,10 @@ function buildSchedulePlan(message, sections, difficulties) {
     let foundFit = false;
 
     for (const option of options) {
+      if (existingSections.length && bundlesConflict(existingSections, option.bundle)) {
+        continue;
+      }
+
       if (chosenBundles.some(existing => bundlesConflict(existing, option.bundle))) {
         continue;
       }
@@ -902,7 +1104,7 @@ function buildSchedulePlan(message, sections, difficulties) {
       chosenBundles.pop();
     }
 
-    if (!foundFit || chosenBundles.length + (orderedCodes.length - (index + 1)) >= best.codeCount) {
+    if (!foundFit || Math.min(maxCourseCount, chosenBundles.length + (orderedCodes.length - (index + 1))) >= best.codeCount) {
       search(index + 1, chosenBundles, score - 0.25);
     }
   }
@@ -911,7 +1113,7 @@ function buildSchedulePlan(message, sections, difficulties) {
 
   return {
     schedule: best.bundles.flat().map(section => section.id),
-    summary: buildScheduleSummary(best.bundles, requestedCodes.length, preferences, difficulties)
+    summary: buildScheduleSummary(best.bundles, requestedCodes.length, preferences, difficulties, summaryOptions)
   };
 }
 
@@ -1017,7 +1219,11 @@ app.get("/api/ratings/course/:department/:courseNumber", async (req, res) => {
     count: data.length
   } : { rating: 0, difficulty: 0, count: 0 };
 
-  res.json({ ratings: data, averages: avg });
+  res.json({
+    ratings: data,
+    averages: avg,
+    summary: buildCourseSummary(`${department} ${courseNumber}`, data || [])
+  });
 });
 
 // Submit course rating
@@ -1050,12 +1256,22 @@ app.get("/api/ratings/professor/:professorId", async (req, res) => {
 
   if (error) return res.status(500).json(error);
 
+  const { data: professor } = await supabase
+    .from("professors")
+    .select("id, full_name")
+    .eq("id", professorId)
+    .maybeSingle();
+
   const avg = data.length ? {
     rating: (data.reduce((a, r) => a + r.rating, 0) / data.length).toFixed(1),
     count: data.length
   } : { rating: 0, count: 0 };
 
-  res.json({ ratings: data, averages: avg });
+  res.json({
+    ratings: data,
+    averages: avg,
+    summary: buildProfessorSummary(professor || { id: professorId, full_name: "this professor" }, data || [])
+  });
 });
 
 // Submit professor rating
@@ -1079,17 +1295,33 @@ app.post("/api/ratings/professor", async (req, res) => {
 app.get("/api/professors", async (req, res) => {
   const { search } = req.query;
 
-  let query = supabase
-    .from("professors")
-    .select("id, full_name");
+  if (!search || String(search).trim().length < 2) {
+    const { data, error } = await supabase
+      .from("professors")
+      .select("id, full_name")
+      .order("full_name", { ascending: true })
+      .limit(20);
 
-  if (search) {
-    query = query.ilike("full_name", `%${search}%`);
+    if (error) return res.status(500).json(error);
+    return res.json(data);
   }
 
-  const { data, error } = await query.limit(20);
+  const normalizedSearch = normalizeText(search);
+  const tokens = extractProfessorQueryTokens(search);
+  const { data, error } = await fetchCachedProfessors();
   if (error) return res.status(500).json(error);
-  res.json(data);
+
+  const ranked = (data || [])
+    .map(professor => ({
+      ...professor,
+      score: scoreProfessorMatch(professor.full_name, normalizedSearch, tokens)
+    }))
+    .filter(professor => professor.score > 0)
+    .sort((a, b) => b.score - a.score || a.full_name.length - b.full_name.length)
+    .slice(0, 20)
+    .map(({ score, ...professor }) => professor);
+
+  res.json(ranked);
 });
 
 app.get("/api/professors/:professorId/courses", async (req, res) => {
@@ -1138,7 +1370,17 @@ app.get("/api/courses/search", async (req, res) => {
 });
 
 app.post("/api/ai-schedule", async (req, res) => {
-  const { message, sections = [], difficulties = {} } = req.body ?? {};
+  const {
+    message,
+    requestText,
+    sections = [],
+    existingSections = [],
+    suggestionLimit,
+    matchedAttributes = [],
+    matchedDepartments = [],
+    matchedInstructors = [],
+    difficulties = {}
+  } = req.body ?? {};
 
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "A chat message is required." });
@@ -1162,6 +1404,7 @@ app.post("/api/ai-schedule", async (req, res) => {
     return res.json({
       mode: "professor-summary",
       schedule: [],
+      professor,
       summary: buildProfessorSummary(professor, data || [])
     });
   }
@@ -1174,7 +1417,18 @@ app.post("/api/ai-schedule", async (req, res) => {
     });
   }
 
-  const plan = buildSchedulePlan(message, sections, difficulties);
+  const plan = buildSchedulePlan(
+    typeof requestText === "string" && requestText.trim() ? requestText : message,
+    sections,
+    difficulties,
+    {
+      existingSections,
+      suggestionLimit,
+      matchedAttributes,
+      matchedDepartments,
+      matchedInstructors
+    }
+  );
   return res.json({
     mode: "schedule",
     schedule: plan.schedule,

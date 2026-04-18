@@ -7,6 +7,8 @@ console.log("API URL:", API);
 
 type Tab = "courses" | "professors";
 
+type ProfessorResult = { id: string; full_name: string };
+
 interface CourseRating {
   id: string;
   department: string;
@@ -63,6 +65,59 @@ function formatProfName(fullName: string) {
   return first && last ? `${first} ${last}` : fullName;
 }
 
+function normalizeSearchText(value: string) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getSearchTokens(value: string) {
+  return normalizeSearchText(value)
+    .split(" ")
+    .filter((token) => token.length > 1);
+}
+
+function scoreProfessorSearch(query: string, professor: ProfessorResult) {
+  const normalizedQuery = normalizeSearchText(query);
+  const tokens = getSearchTokens(query);
+  if (!normalizedQuery || !tokens.length) return 0;
+
+  const displayName = normalizeSearchText(formatProfName(professor.full_name));
+  const rawName = normalizeSearchText(professor.full_name);
+  const haystack = `${displayName} ${rawName}`;
+
+  if (displayName === normalizedQuery || rawName === normalizedQuery) return 120;
+  if (displayName.includes(normalizedQuery) || rawName.includes(normalizedQuery)) return 95;
+
+  if (tokens.length > 1 && !tokens.every((token) => haystack.includes(token))) {
+    return 0;
+  }
+
+  const startsWithScore = tokens.filter((token) =>
+    haystack.split(" ").some((part) => part.startsWith(token)),
+  ).length * 18;
+  const containsScore = tokens.filter((token) => haystack.includes(token)).length * 9;
+  return startsWithScore + containsScore;
+}
+
+function rankProfessorResults(query: string, professors: ProfessorResult[]) {
+  const seen = new Map<string, ProfessorResult>();
+  professors.forEach((professor) => {
+    if (professor?.id) seen.set(professor.id, professor);
+  });
+
+  return [...seen.values()]
+    .map((professor) => ({
+      professor,
+      score: scoreProfessorSearch(query, professor),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || formatProfName(a.professor.full_name).localeCompare(formatProfName(b.professor.full_name)))
+    .map(({ professor }) => professor);
+}
+
 function getRatingLabel(r: number) {
   if (r >= 5) return "Awesome";
   if (r >= 4) return "Great";
@@ -88,6 +143,45 @@ function ScoreBadge({ score }: { score: number }) {
       }}
     >
       {score.toFixed(1)}
+    </div>
+  );
+}
+
+function AIReviewSummary({ summary }: { summary: string | null }) {
+  if (!summary) return null;
+
+  return (
+    <div
+      style={{
+        background: "var(--panel)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: 18,
+        marginBottom: 18,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: "var(--text)",
+          marginBottom: 8,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}
+      >
+        AI Review Summary
+      </div>
+      <p
+        style={{
+          margin: 0,
+          color: "var(--text)",
+          fontSize: 14,
+          lineHeight: 1.7,
+        }}
+      >
+        {summary}
+      </p>
     </div>
   );
 }
@@ -206,6 +300,63 @@ function getSentiment(reviews: string[]) {
     negative: neg,
     score: Math.round((pos / total) * 100),
   };
+}
+
+function averageRating(ratings: { rating: number }[]) {
+  if (!ratings.length) return null;
+  return ratings.reduce((sum, rating) => sum + Number(rating.rating || 0), 0) / ratings.length;
+}
+
+function describeTone(ratings: { rating: number }[]) {
+  const positive = ratings.filter((rating) => Number(rating.rating) >= 4).length;
+  const negative = ratings.filter((rating) => Number(rating.rating) <= 2).length;
+
+  if (positive >= negative + 2) return "mostly positive";
+  if (negative >= positive + 2) return "mostly critical";
+  return "mixed";
+}
+
+function buildClientCourseSummary(
+  courseLabel: string,
+  ratings: CourseRating[],
+): string | null {
+  if (!ratings.length) return null;
+
+  const avg = averageRating(ratings);
+  const writtenCount = ratings.filter((rating) => rating.review?.trim()).length;
+  const difficultyValues = ratings
+    .map((rating) => Number(rating.difficulty || 0))
+    .filter((difficulty) => difficulty > 0);
+  const difficultyAvg = difficultyValues.length
+    ? difficultyValues.reduce((sum, difficulty) => sum + difficulty, 0) /
+      difficultyValues.length
+    : null;
+  const difficultyText =
+    difficultyAvg !== null
+      ? ` Students rate the difficulty around ${difficultyAvg.toFixed(1)}/5.`
+      : "";
+
+  return `Based on ${writtenCount} written ${writtenCount === 1 ? "review" : "reviews"} and ${ratings.length} total ${ratings.length === 1 ? "rating" : "ratings"} for ${courseLabel}, the overall feedback is ${describeTone(ratings)} with an average rating of ${avg?.toFixed(1)}/5.${difficultyText} This summary only reflects reviews that students submitted in the app.`;
+}
+
+function buildClientProfessorSummary(
+  professorName: string,
+  ratings: ProfessorRating[],
+): string | null {
+  if (!ratings.length) return null;
+
+  const avg = averageRating(ratings);
+  const writtenCount = ratings.filter((rating) => rating.review?.trim()).length;
+  const courseCodes = new Set(
+    ratings
+      .filter((rating) => rating.department && rating.course_number)
+      .map((rating) => `${rating.department} ${rating.course_number}`),
+  );
+  const courseText = courseCodes.size
+    ? ` Most of the submitted feedback covers ${[...courseCodes].slice(0, 3).join(", ")}.`
+    : "";
+
+  return `Based on ${writtenCount} written ${writtenCount === 1 ? "review" : "reviews"} and ${ratings.length} total ${ratings.length === 1 ? "rating" : "ratings"} for ${professorName}, the overall feedback is ${describeTone(ratings)} with an average rating of ${avg?.toFixed(1)}/5.${courseText} This summary only reflects reviews that students submitted in the app.`;
 }
 
 // ── Analytics sub-components ───────────────────────────────────────────────────
@@ -1246,6 +1397,7 @@ export default function Reviews() {
   const [courseResults, setCourseResults] = useState<
     { department: string; course_number: string; title: string }[]
   >([]);
+  const [courseSearchLoading, setCourseSearchLoading] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<{
     department: string;
     course_number: string;
@@ -1257,12 +1409,12 @@ export default function Reviews() {
     difficulty: string;
     count: number;
   } | null>(null);
+  const [courseSummary, setCourseSummary] = useState<string | null>(null);
 
   const [profSearch, setProfSearch] = useState("");
   const [profApiQuery, setProfApiQuery] = useState("");
-  const [profResults, setProfResults] = useState<
-    { id: string; full_name: string }[]
-  >([]);
+  const [profResults, setProfResults] = useState<ProfessorResult[]>([]);
+  const [profSearchLoading, setProfSearchLoading] = useState(false);
   const [selectedProf, setSelectedProf] = useState<{
     id: string;
     full_name: string;
@@ -1272,6 +1424,7 @@ export default function Reviews() {
     rating: string;
     count: number;
   } | null>(null);
+  const [profSummary, setProfSummary] = useState<string | null>(null);
   const [profCourses, setProfCourses] = useState<
     { department: string; course_number: string; title: string }[]
   >([]);
@@ -1290,8 +1443,12 @@ export default function Reviews() {
     fetch(`${API}/api/ratings/course/${dept}/${num}`)
       .then((r) => r.json())
       .then((data) => {
-        setCourseRatings(data.ratings || []);
+        const ratings = data.ratings || [];
+        setCourseRatings(ratings);
         setCourseAvg(data.averages || null);
+        setCourseSummary(
+          data.summary || buildClientCourseSummary(`${dept} ${num}`, ratings),
+        );
       });
   };
 
@@ -1300,12 +1457,15 @@ export default function Reviews() {
     course_number: string;
     title: string;
   }) => {
+    suppressCourseSearch.current = true;
     setSelectedCourse(c);
     setCourseSearch(`${c.department} ${c.course_number}`);
     setCourseResults([]);
+    setCourseSearchLoading(false);
     setShowForm(false);
     setSubmitted(false);
     setSubmitError(null);
+    setCourseSummary(null);
     loadCourseRatings(c.department, c.course_number);
   };
 
@@ -1335,18 +1495,39 @@ export default function Reviews() {
   }, []);
 
   useEffect(() => {
+    const professorId = searchParams.get("professor");
+    if (!professorId) return;
+
+    const professorName = searchParams.get("professorName") || "Selected professor";
+    setTab("professors");
+    setShowForm(false);
+    handleSelectProf({
+      id: professorId,
+      full_name: professorName,
+    });
+  }, []);
+
+  useEffect(() => {
     if (suppressCourseSearch.current) {
       suppressCourseSearch.current = false;
       return;
     }
-    if (courseSearch.length < 2) {
+    const searchText = courseSearch.trim();
+    if (searchText.length < 2) {
       setCourseResults([]);
+      setCourseSearchLoading(false);
       return;
     }
-    const parts = courseSearch.trim().toUpperCase().split(" ");
-    const dept = parts[0];
-    const num = parts[1] || "";
-    fetch(`${API}/api/courses?term=202620&search=${encodeURIComponent(dept)}`)
+
+    setCourseSearchLoading(true);
+    const timeout = window.setTimeout(() => {
+      const parts = searchText.toUpperCase().split(/\s+/);
+      const dept = parts[0];
+      const num = parts[1] || "";
+      const apiSearch = /^[A-Z]{2,5}$/.test(dept) ? dept : searchText;
+      const tokens = searchText.toLowerCase().split(/\s+/).filter(Boolean);
+
+      fetch(`${API}/api/courses?term=202620&search=${encodeURIComponent(apiSearch)}`)
       .then((r) => r.json())
       .then((data) => {
         const seen = new Set<string>();
@@ -1357,10 +1538,13 @@ export default function Reviews() {
         }[] = [];
         for (const c of data) {
           const key = `${c.department}-${c.course_number}`;
+          const haystack =
+            `${c.department} ${c.course_number} ${c.title}`.toLowerCase();
           if (
             !seen.has(key) &&
             c.course_number &&
-            (!num || c.course_number.startsWith(num))
+            (!num || c.course_number.startsWith(num)) &&
+            tokens.every((token) => haystack.includes(token))
           ) {
             seen.add(key);
             unique.push({
@@ -1371,8 +1555,18 @@ export default function Reviews() {
           }
         }
         setCourseResults(unique.slice(0, 8));
+        setCourseSearchLoading(false);
       })
-      .catch(() => setCourseResults([]));
+      .catch(() => {
+        setCourseResults([]);
+        setCourseSearchLoading(false);
+      });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeout);
+      setCourseSearchLoading(false);
+    };
   }, [courseSearch]);
 
   useEffect(() => {
@@ -1382,20 +1576,53 @@ export default function Reviews() {
     }
     if (!profApiQuery || profApiQuery.length < 2) {
       setProfResults([]);
+      setProfSearchLoading(false);
       return;
     }
-    fetch(`${API}/api/professors?search=${encodeURIComponent(profApiQuery)}`)
-      .then((r) => r.json())
-      .then((data) => setProfResults(data.slice(0, 8)))
-      .catch(() => setProfResults([]));
+
+    setProfSearchLoading(true);
+    const timeout = window.setTimeout(() => {
+      const searchText = profApiQuery.trim();
+      const queries = [
+        searchText,
+        ...getSearchTokens(searchText),
+      ].filter((query, index, all) => query.length >= 2 && all.indexOf(query) === index);
+
+      Promise.all(
+        queries.map((query) =>
+          fetch(`${API}/api/professors?search=${encodeURIComponent(query)}`)
+            .then((r) => r.json())
+            .catch(() => []),
+        ),
+      )
+        .then((responses) => {
+          const merged = responses.flat().filter(Boolean) as ProfessorResult[];
+          setProfResults(rankProfessorResults(searchText, merged).slice(0, 8));
+          setProfSearchLoading(false);
+        })
+        .catch(() => {
+          setProfResults([]);
+          setProfSearchLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeout);
+      setProfSearchLoading(false);
+    };
   }, [profApiQuery]);
 
-  const loadProfRatings = (profId: string) => {
+  const loadProfRatings = (profId: string, professorName = "this professor") => {
     fetch(`${API}/api/ratings/professor/${profId}`)
       .then((r) => r.json())
       .then((data) => {
-        setProfRatings(data.ratings || []);
+        const ratings = data.ratings || [];
+        setProfRatings(ratings);
         setProfAvg(data.averages || null);
+        setProfSummary(
+          data.summary ||
+            buildClientProfessorSummary(professorName, ratings),
+        );
       });
   };
 
@@ -1405,13 +1632,15 @@ export default function Reviews() {
     setProfSearch(formatProfName(p.full_name));
     setProfApiQuery("");
     setProfResults([]);
+    setProfSearchLoading(false);
     setShowForm(false);
     setSubmitted(false);
     setSubmitError(null);
     setFormDept("");
     setFormCourseNum("");
     setProfCourses([]);
-    loadProfRatings(p.id);
+    setProfSummary(null);
+    loadProfRatings(p.id, formatProfName(p.full_name));
     fetch(`${API}/api/professors/${p.id}/courses`)
       .then((r) => r.json())
       .then((data) => setProfCourses(Array.isArray(data) ? data : []))
@@ -1796,13 +2025,13 @@ export default function Reviews() {
       </header>
 
       <div style={{ maxWidth: 900, margin: "40px auto", padding: "0 24px" }}>
-        <div style={{ position: "relative", marginBottom: 32 }}>
+        <div style={{ marginBottom: 32 }}>
           <input
             style={{
               ...inputStyle,
               width: "100%",
               fontSize: 16,
-              padding: "14px 18px",
+              padding: "16px 18px",
               boxSizing: "border-box",
             }}
             placeholder={
@@ -1824,64 +2053,144 @@ export default function Reviews() {
               }
             }}
           />
-          {(tab === "courses" ? courseResults : profResults).length > 0 && (
+          {((tab === "courses" && courseSearch.trim().length >= 2 && !selectedCourse) ||
+            (tab === "professors" && profSearch.trim().length >= 2 && !selectedProf)) && (
             <div
               style={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                right: 0,
                 background: "var(--panel)",
                 border: "1px solid var(--border)",
-                borderRadius: 10,
-                zIndex: 100,
-                marginTop: 4,
+                borderRadius: 12,
+                marginTop: 10,
                 overflow: "hidden",
+                boxShadow: "0 18px 44px rgba(0,0,0,0.18)",
               }}
             >
-              {tab === "courses"
-                ? courseResults.map((c) => (
-                    <div
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 16px",
+                  borderBottom: "1px solid var(--border)",
+                  color: "var(--muted)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                <span>{tab === "courses" ? "Matching Courses" : "Matching Professors"}</span>
+                <span>
+                  {tab === "courses"
+                    ? courseSearchLoading
+                      ? "Searching..."
+                      : `${courseResults.length} shown`
+                    : profSearchLoading
+                      ? "Searching..."
+                      : `${profResults.length} shown`}
+                </span>
+              </div>
+
+              {tab === "courses" ? (
+                <div style={{ display: "grid" }}>
+                  {courseResults.map((c) => (
+                    <button
                       key={`${c.department}-${c.course_number}`}
                       onClick={() => handleSelectCourse(c)}
                       style={{
-                        padding: "12px 18px",
+                        width: "100%",
+                        padding: "14px 18px",
                         cursor: "pointer",
                         borderBottom: "1px solid var(--border)",
+                        borderTop: 0,
+                        borderLeft: 0,
+                        borderRight: 0,
+                        background: "transparent",
                         display: "flex",
                         alignItems: "center",
                         gap: 14,
+                        textAlign: "left",
                       }}
                     >
                       <span
                         style={{
-                          fontWeight: 700,
+                          fontWeight: 800,
                           color: "var(--text)",
-                          minWidth: 90,
+                          minWidth: 110,
+                          fontSize: 15,
                         }}
                       >
                         {c.department} {c.course_number}
                       </span>
-                      <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          color: "var(--muted)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {c.title}
                       </span>
-                    </div>
-                  ))
-                : profResults.map((p) => (
+                    </button>
+                  ))}
+                  {!courseSearchLoading && courseResults.length === 0 && (
                     <div
+                      style={{
+                        padding: "18px",
+                        color: "var(--muted)",
+                        fontSize: 14,
+                      }}
+                    >
+                      No course matches yet. Try a course code, CRN, or title keyword.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 8, padding: 10 }}>
+                  {profResults.map((p) => (
+                    <button
                       key={p.id}
                       onClick={() => handleSelectProf(p)}
                       style={{
-                        padding: "12px 18px",
+                        padding: "14px 16px",
                         cursor: "pointer",
-                        borderBottom: "1px solid var(--border)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        background: "var(--panel2)",
+                        textAlign: "left",
                       }}
                     >
-                      <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                      <span style={{ fontWeight: 800, color: "var(--text)", fontSize: 15 }}>
                         {formatProfName(p.full_name)}
                       </span>
-                    </div>
+                      <span
+                        style={{
+                          display: "block",
+                          color: "var(--muted)",
+                          fontSize: 12,
+                          marginTop: 4,
+                        }}
+                      >
+                        Open reviews and courses
+                      </span>
+                    </button>
                   ))}
+                  {!profSearchLoading && profResults.length === 0 && (
+                    <div
+                      style={{
+                        padding: "8px",
+                        color: "var(--muted)",
+                        fontSize: 14,
+                      }}
+                    >
+                      No professor matches yet. Try first name, last name, or the exact spelling from the course card.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1934,6 +2243,9 @@ export default function Reviews() {
               >
                 No reviews yet. Be the first!
               </div>
+            )}
+            {courseAvg && courseAvg.count > 0 && (
+              <AIReviewSummary summary={courseSummary} />
             )}
             {courseRatings.length > 0 && (
               <>
@@ -2075,6 +2387,9 @@ export default function Reviews() {
               >
                 No reviews yet. Be the first!
               </div>
+            )}
+            {profAvg && profAvg.count > 0 && (
+              <AIReviewSummary summary={profSummary} />
             )}
 
             {profRatings.length > 0 && (
