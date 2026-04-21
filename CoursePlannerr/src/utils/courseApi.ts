@@ -25,6 +25,16 @@ const DAY_NAME_MAP: Record<string, Day> = {
   saturday: 'S',
 };
 
+function decodeHtml(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 function normalizeMeetingDay(token: string): Day | null {
   return DAY_NAME_MAP[String(token).trim().toLowerCase()] ?? null;
 }
@@ -105,7 +115,7 @@ export function mapApiCourseToCourse(rawCourse: any): Course {
     id: String(rawCourse?.id ?? `${department}-${courseNumber}-${rawCourse?.crn ?? 'section'}`),
     crn: String(rawCourse?.crn ?? ''),
     code: `${department} ${courseNumber}`.trim(),
-    title: String(rawCourse?.title ?? 'Untitled course'),
+    title: decodeHtml(String(rawCourse?.title ?? 'Untitled course')),
     instructor: getInstructorName(rawCourse),
     campus: String(rawCourse?.campus ?? 'Main Campus'),
     section: String(rawCourse?.schedule?.section ?? rawCourse?.section ?? ''),
