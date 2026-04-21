@@ -66,7 +66,6 @@ type SchedulerSection = Pick<
 > & {
   seatsRemaining: number | null;
   isFull: boolean;
-  // Human-readable capacity note for the AI to interpret correctly
   capacityNote: string;
 };
 
@@ -284,7 +283,6 @@ function buildAttributeCandidateSections(text: string, allCourses: Course[], sch
 
     const limit = Number(course.capacity?.limit ?? 0);
     const enrolled = Number(course.capacity?.enrolled ?? 0);
-    // FIX 1: 0 enrolled = EMPTY (has seats). Only full when enrolled >= limit AND limit > 0.
     const hasOpenSeat = limit > 0 && enrolled < limit;
     const existingScore = codeScores.get(course.code) ?? 0;
     codeScores.set(course.code, Math.max(existingScore, score + (hasOpenSeat ? 1 : 0)));
@@ -305,7 +303,6 @@ function buildAttributeCandidateSections(text: string, allCourses: Course[], sch
   };
 }
 
-// FIX 1: Correct capacity note so AI never confuses 0/15 (empty) with full
 function getCapacityNote(enrolled: number, limit: number): string {
   if (limit <= 0) return "No capacity data";
   if (enrolled === 0) return `Empty — 0 of ${limit} seats taken, ${limit} seats available`;
@@ -326,7 +323,6 @@ function compactCourseForScheduler(course: Course): SchedulerSection {
     section: course.section,
     capacity: course.capacity,
     seatsRemaining,
-    // FIX 1: 0 enrolled means EMPTY, not full. Full = enrolled >= limit AND limit > 0.
     isFull: limit > 0 && enrolled >= limit,
     capacityNote: getCapacityNote(enrolled, limit),
     meetings: course.meetings,
@@ -369,10 +365,19 @@ export function AIScheduler({ allCourses, scheduledCourses, onApplySchedule, act
     instructorQuery: "",
   });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Refocus the input whenever loading finishes so the user can
+  // keep typing without having to click the box again.
+  useEffect(() => {
+    if (!loading) {
+      inputRef.current?.focus();
+    }
+  }, [loading]);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -495,7 +500,6 @@ export function AIScheduler({ allCourses, scheduledCourses, onApplySchedule, act
           matchedDepartments,
           matchedInstructors,
           difficulties,
-          // FIX 1: Explicit capacity rule for the server-side AI prompt
           capacityRule: "CRITICAL: isFull=false means the class has open seats. isFull=true means it is full. seatsRemaining=0 AND isFull=false means no capacity data. enrolled=0 means ZERO students, the class is EMPTY. Never treat 0 enrolled as full.",
         }),
       });
@@ -615,6 +619,7 @@ export function AIScheduler({ allCourses, scheduledCourses, onApplySchedule, act
 
           <div className="ai-panel__input">
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}

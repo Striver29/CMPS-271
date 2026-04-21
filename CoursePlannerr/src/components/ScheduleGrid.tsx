@@ -99,7 +99,26 @@ export function ScheduleGrid({
   const gridHeight = (endDayMin - startDayMin) * pxPerMin;
 
   const [tipVisible, setTipVisible] = useState(true);
-  const [scheduleVisible, setScheduleVisible] = useState(true);
+
+  // ── Persist the free-time strip toggle across sessions ──────────
+  const [scheduleVisible, setScheduleVisible] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("uniflow:scheduleVisible");
+      return saved === null ? true : saved === "true";
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("uniflow:scheduleVisible", String(scheduleVisible));
+    } catch {
+      // localStorage unavailable in some private browsing modes
+    }
+  }, [scheduleVisible]);
+  // ────────────────────────────────────────────────────────────────
+
   const [hoveredBlock, setHoveredBlock] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [reviewModal, setReviewModal] = useState<ReviewModal>(null);
