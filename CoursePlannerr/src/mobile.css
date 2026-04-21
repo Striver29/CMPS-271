@@ -43,7 +43,6 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-left: auto;
   touch-action: manipulation;
 }
 
@@ -267,68 +266,72 @@ textarea {
    ============================================================ */
 @media (max-width: 600px) {
 
-  /* ── Top Nav ── */
+  /* ── Top Nav ── single row: brand | select + toggle + hamburger */
   .topNav {
     padding: 8px 10px !important;
-    gap: 6px !important;
+    gap: 8px !important;
     position: sticky;
     top: 0;
     z-index: 300;
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
   }
 
-  /* Row 1: logo + app name fill full width */
+  /* Brand: logo + name, shrink if needed but don't wrap */
   .topNav__brand {
-    flex: 1 1 100% !important;
+    flex: 0 0 auto !important;
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
+    min-width: 0 !important;
   }
 
-  /* Always show the app name on mobile */
+  /* Always show the app name */
   .topNav__brandText {
     display: inline !important;
     font-size: 15px !important;
     font-weight: 700 !important;
+    white-space: nowrap !important;
   }
 
   .topNav__logo {
     width: 28px !important;
     height: 28px !important;
     font-size: 13px !important;
+    flex-shrink: 0 !important;
   }
 
-  /* Row 2: controls take full width */
+  /* Controls: sit on the right, no wrap */
   .topNav__controls {
-    flex: 1 1 100% !important;
+    flex: 1 1 auto !important;
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
-    padding-top: 6px !important;
-    border-top: 1px solid var(--border) !important;
-    margin-top: 2px !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    flex-wrap: nowrap !important;
   }
 
-  /* Semester dropdown fills available space */
+  /* Semester dropdown: fixed width wide enough for the text */
   .topNav__select {
     flex: 1 1 auto !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    font-size: 13px !important;
-    padding: 6px 8px !important;
+    max-width: 160px !important;
+    min-width: 120px !important;
+    font-size: 12px !important;
+    padding: 6px 6px !important;
   }
 
-  /* Show theme toggle (first logout button = emoji) */
+  /* Show the theme toggle emoji button */
   .topNav__logout {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    padding: 6px 10px !important;
+    padding: 6px 8px !important;
     font-size: 16px !important;
     flex-shrink: 0 !important;
   }
 
-  /* Hide the text Logout button — it lives in the hamburger menu */
+  /* Hide the text Logout button — it is in the hamburger menu */
   .topNav__controls .topNav__logout:last-child {
     display: none !important;
   }

@@ -478,17 +478,6 @@ export function TopNav({
           >
             <span className="topNav__brandText">{appName}</span>
           </button>
-
-          {/* ── MOBILE: hamburger button ── */}
-          <button
-            type="button"
-            className="topNav__hamburger"
-            onClick={() => setMobileMenuOpen((o) => !o)}
-            aria-label="Toggle menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? "✕" : "☰"}
-          </button>
         </div>
 
         {/* ── Nav links — toggled by isOpen on mobile ── */}
@@ -594,6 +583,16 @@ export function TopNav({
             }}
           >
             Logout
+          </button>
+          {/* ── MOBILE: hamburger button — lives at end of controls ── */}
+          <button
+            type="button"
+            className="topNav__hamburger"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? "✕" : "☰"}
           </button>
         </div>
       </header>
