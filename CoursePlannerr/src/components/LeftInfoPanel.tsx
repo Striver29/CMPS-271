@@ -7,6 +7,8 @@ type Props = {
   onTabChange: (tab: Tab) => void;
   selectedCourse: Course | null;
   selectedCrns: string[];
+  scheduled: Course[];
+  onToggleSchedule: (course: Course) => void;
 };
 
 function TabButton({ label, title, isActive, onClick }: { label: string; title: string; isActive: boolean; onClick: () => void }) {
@@ -27,13 +29,18 @@ function Row({ label, value, alwaysShow }: { label: string; value: React.ReactNo
   );
 }
 
-export function LeftInfoPanel({ activeTab, onTabChange, selectedCourse, selectedCrns }: Props) {
+export function LeftInfoPanel({ activeTab, onTabChange, selectedCourse, selectedCrns, scheduled, onToggleSchedule }: Props) {
   return (
     <aside className="leftPanel">
       <div className="sideTabs" role="tablist" aria-label="Info tabs">
         <TabButton label="🏠" title="Welcome" isActive={activeTab === 'welcome'} onClick={() => onTabChange('welcome')} />
         <TabButton label="ℹ️" title="Course Information" isActive={activeTab === 'info'} onClick={() => onTabChange('info')} />
-        <TabButton label="👤" title="Selected CRNs" isActive={activeTab === 'crn'} onClick={() => onTabChange('crn')} />
+        <TabButton
+          label={scheduled.length > 0 ? `☑ ${scheduled.length}` : '☑'}
+          title="Selected Courses"
+          isActive={activeTab === 'crn'}
+          onClick={() => onTabChange('crn')}
+        />
       </div>
 
       <div className="leftPanel__body">
@@ -135,15 +142,124 @@ export function LeftInfoPanel({ activeTab, onTabChange, selectedCourse, selected
 
         {activeTab === 'crn' && (
           <div className="crnBox">
-            <div className="crnBox__title">Selected CRNs</div>
-            {selectedCrns.length === 0 ? (
-              <div className="emptyState">No courses added yet.</div>
+            <div className="crnBox__title">
+              Selected Courses
+              {scheduled.length > 0 && (
+                <span style={{
+                  marginLeft: 8,
+                  fontSize: 11,
+                  fontWeight: 400,
+                  color: 'var(--muted)',
+                }}>
+                  {scheduled.length} course{scheduled.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {scheduled.length === 0 ? (
+              <div className="emptyState">No courses added yet. Click ☐ on any course to add it.</div>
             ) : (
-              <ul className="crnList">
-                {selectedCrns.map((crn) => (
-                  <li key={crn}>{crn}</li>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                {scheduled.map((course) => (
+                  <button
+                    key={course.id}
+                    type="button"
+                    onClick={() => onToggleSchedule(course)}
+                    title="Click to remove from schedule"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: 'var(--panel2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s, border-color 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'rgba(163,38,56,0.08)';
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(163,38,56,0.4)';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--panel2)';
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+                    }}
+                  >
+                    {/* Remove icon */}
+                    <span style={{
+                      flexShrink: 0,
+                      marginTop: 1,
+                      fontSize: 14,
+                      color: '#A32638',
+                      opacity: 0.7,
+                      lineHeight: 1,
+                    }}>✕</span>
+
+                    {/* Course info */}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: 'var(--text)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {course.code}
+                        <span style={{ fontWeight: 400, color: 'var(--muted)', marginLeft: 6, fontSize: 11 }}>
+                          §{course.section}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontSize: 11,
+                        color: 'var(--muted)',
+                        marginTop: 2,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {course.title}
+                      </div>
+                      <div style={{
+                        fontSize: 11,
+                        color: 'var(--muted)',
+                        marginTop: 2,
+                        display: 'flex',
+                        gap: 8,
+                      }}>
+                        <span>CRN {course.crn}</span>
+                        {course.credits != null && course.credits > 0 && (
+                          <span>{course.credits} cr</span>
+                        )}
+                        {course.meetings?.[0] && (
+                          <span>{course.meetings[0].days.join('')} {course.meetings[0].start}–{course.meetings[0].end}</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
                 ))}
-              </ul>
+
+                {/* Summary row */}
+                <div style={{
+                  marginTop: 4,
+                  padding: '8px 12px',
+                  background: 'var(--bg)',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: 12,
+                  color: 'var(--muted)',
+                }}>
+                  <span>Total credits</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>
+                    {scheduled.reduce((sum, c) => sum + (c.credits ?? 0), 0)}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         )}
