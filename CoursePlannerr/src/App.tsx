@@ -107,7 +107,7 @@ const COURSE_COLORS = [
 ];
 
 export default function App() {
-  const appName = "Uniflow";
+  const appName = "UniFlow";
   const initialTerms = useMemo(
     () => readCachedJson<TermRecord[]>(TERMS_CACHE_KEY) ?? [],
     [],

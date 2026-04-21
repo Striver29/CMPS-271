@@ -270,10 +270,26 @@ textarea {
   /* ── Top Nav ── */
   .topNav {
     padding: 8px 10px !important;
-    gap: 8px !important;
+    gap: 6px !important;
     position: sticky;
     top: 0;
     z-index: 300;
+    flex-wrap: wrap !important;
+  }
+
+  /* Row 1: logo + app name fill full width */
+  .topNav__brand {
+    flex: 1 1 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  /* Always show the app name on mobile */
+  .topNav__brandText {
+    display: inline !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
   }
 
   .topNav__logo {
@@ -282,17 +298,46 @@ textarea {
     font-size: 13px !important;
   }
 
+  /* Row 2: controls take full width */
+  .topNav__controls {
+    flex: 1 1 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding-top: 6px !important;
+    border-top: 1px solid var(--border) !important;
+    margin-top: 2px !important;
+  }
+
+  /* Semester dropdown fills available space */
+  .topNav__select {
+    flex: 1 1 auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    font-size: 13px !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Show theme toggle (first logout button = emoji) */
   .topNav__logout {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 6px 10px !important;
+    font-size: 16px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Hide the text Logout button — it lives in the hamburger menu */
+  .topNav__controls .topNav__logout:last-child {
     display: none !important;
   }
 
-  .topNav__select {
-    max-width: 110px !important;
-    font-size: 12px !important;
-    padding: 5px 6px !important;
+  .topNav__controlLabel {
+    display: none !important;
   }
 
-  .topNav__controlLabel {
+  .topNav__status {
     display: none !important;
   }
 
