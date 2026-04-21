@@ -32,7 +32,10 @@ function decodeHtml(str: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&nbsp;/g, ' ')
+    // Ensure a space on both sides of & (e.g. "Computer &Information" → "Computer & Information")
+    .replace(/\s*&\s*/g, ' & ')
+    .trim();
 }
 
 function normalizeMeetingDay(token: string): Day | null {
