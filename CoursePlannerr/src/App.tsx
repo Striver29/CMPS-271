@@ -13,7 +13,7 @@ import AdminRoute from "./components/AdminRoute";
 import { mapApiCoursesToCourses } from "./utils/courseApi.ts";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
-const COURSE_CACHE_PREFIX = "uniflow:courses:";
+const COURSE_CACHE_PREFIX = "uniflow:courses:v2:";
 const TERMS_CACHE_KEY = "uniflow:terms";
 const EMPTY_COURSES: Course[] = [];
 
