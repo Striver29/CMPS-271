@@ -17,8 +17,6 @@ const COURSE_CACHE_PREFIX = "uniflow:courses:v2:";
 const TERMS_CACHE_KEY = "uniflow:terms";
 const EMPTY_COURSES: Course[] = [];
 
-// Decode HTML entities in course titles that may have been saved to Supabase
-// before the API-level fix was applied (e.g. "&amp;" → "&")
 function decodeHtmlEntities(str: string): string {
   return str
     .replace(/&amp;/g, '&')
@@ -58,7 +56,6 @@ type FavoriteRow = {
   course: Course | null;
 };
 
-// ── Mobile tab type ──────────────────────────────────────────
 type MobileTab = "search" | "schedule";
 
 const Login = lazy(() => import("./pages/Login"));
@@ -190,15 +187,11 @@ export default function App() {
     };
   }, [semesterId]);
 
-  const [activeLeftTab, setActiveLeftTab] = useState<
-    "welcome" | "info" | "crn"
-  >("info");
+  const [activeLeftTab, setActiveLeftTab] = useState<"welcome" | "info" | "crn">("info");
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [hoveredCourse, setHoveredCourse] = useState<Course | null>(null);
   const [favorites, setFavorites] = useState<Course[]>([]);
-  const [customColors, setCustomColors] = useState<Map<string, string>>(
-    new Map(),
-  );
+  const [customColors, setCustomColors] = useState<Map<string, string>>(new Map());
 
   const [activeSlot, setActiveSlot] = useState(1);
   const [schedules, setSchedules] = useState<Record<number, Course[]>>({
@@ -208,7 +201,6 @@ export default function App() {
   });
   const [userId, setUserId] = useState<string | null>(null);
 
-  // ── MOBILE: which panel is visible ──────────────────────────
   const [mobileTab, setMobileTab] = useState<MobileTab>("schedule");
 
   useEffect(() => {
@@ -328,9 +320,7 @@ export default function App() {
     () => scheduled.reduce((acc, c) => acc + (c.credits ?? 0), 0),
     [scheduled],
   );
-  const [courseDifficulties, setCourseDifficulties] = useState<
-    Record<string, number>
-  >({});
+  const [courseDifficulties, setCourseDifficulties] = useState<Record<string, number>>({});
   const courseDifficultiesRef = useRef(courseDifficulties);
   const difficultyRequestsRef = useRef(new Set<string>());
 
@@ -354,10 +344,7 @@ export default function App() {
           if (data.averages?.difficulty > 0) {
             setCourseDifficulties((prev) => {
               if (prev[c.code] !== undefined) return prev;
-              return {
-                ...prev,
-                [c.code]: parseFloat(data.averages.difficulty),
-              };
+              return { ...prev, [c.code]: parseFloat(data.averages.difficulty) };
             });
           }
           difficultyRequestsRef.current.delete(c.code);
@@ -369,23 +356,15 @@ export default function App() {
   }, [scheduled]);
 
   const averageDifficulty = useMemo(() => {
-    const rated = scheduled.filter(
-      (c) => courseDifficulties[c.code] !== undefined,
-    );
+    const rated = scheduled.filter((c) => courseDifficulties[c.code] !== undefined);
     if (rated.length === 0) return null;
-    return (
-      rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) /
-      rated.length
-    );
+    return rated.reduce((acc, c) => acc + courseDifficulties[c.code], 0) / rated.length;
   }, [scheduled, courseDifficulties]);
 
   const courseColorMap = useMemo(() => {
     const map = new Map<string, string>();
     scheduled.forEach((c, i) => {
-      map.set(
-        c.id,
-        customColors.get(c.id) ?? COURSE_COLORS[i % COURSE_COLORS.length],
-      );
+      map.set(c.id, customColors.get(c.id) ?? COURSE_COLORS[i % COURSE_COLORS.length]);
     });
     return map;
   }, [scheduled, customColors]);
@@ -435,7 +414,6 @@ export default function App() {
         activePage="home"
       />
 
-      {/* ── MOBILE: tab switcher bar ── */}
       <div className="mobileTabs">
         <button
           className={`mobileTab${mobileTab === "schedule" ? " isActive" : ""}`}
@@ -452,19 +430,17 @@ export default function App() {
       </div>
 
       <div className="mainContainer" style={{ flex: 1, minHeight: 0 }}>
-        {/* Left info panel — hidden on mobile via CSS */}
         <LeftInfoPanel
           activeTab={activeLeftTab}
           onTabChange={setActiveLeftTab}
           selectedCourse={displayedCourse}
           selectedCrns={selectedCrns}
+          scheduled={scheduled}
+          onToggleSchedule={toggleSchedule}
         />
 
-        {/* Schedule — hidden on mobile when search tab is active */}
         <div
-          style={{
-            display: "contents",
-          }}
+          style={{ display: "contents" }}
           className={`mobilePanel mobilePanel--schedule${mobileTab === "schedule" ? " isVisible" : ""}`}
         >
           <ScheduleGrid
@@ -479,11 +455,8 @@ export default function App() {
           />
         </div>
 
-        {/* Search — hidden on mobile when schedule tab is active */}
         <div
-          style={{
-            display: "contents",
-          }}
+          style={{ display: "contents" }}
           className={`mobilePanel mobilePanel--search${mobileTab === "search" ? " isVisible" : ""}`}
         >
           <RightSearchPanel
