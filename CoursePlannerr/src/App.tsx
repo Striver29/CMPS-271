@@ -404,7 +404,7 @@ export default function App() {
   };
 
   const mainApp = (
-    <div className="appShell">
+    <div className="appShell" style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <TopNav
         appName={appName}
         semesterId={semesterId}
@@ -432,7 +432,7 @@ export default function App() {
         </button>
       </div>
 
-      <div className="mainContainer">
+      <div className="mainContainer" style={{ flex: 1, minHeight: 0 }}>
         {/* Left info panel — hidden on mobile via CSS */}
         <LeftInfoPanel
           activeTab={activeLeftTab}

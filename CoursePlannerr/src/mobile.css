@@ -181,11 +181,21 @@ textarea {
   }
 
   .middlePanel {
-    height: 55vw !important;
-    min-height: 360px !important;
-    max-height: 520px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     border-right: none !important;
-    flex-shrink: 0;
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .schGrid {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: auto !important;
   }
 
   .rightPanel {
@@ -287,19 +297,41 @@ textarea {
   }
 
   /* ── Schedule ── */
+
+  /* Fill remaining viewport height — no fixed px heights */
   .middlePanel {
-    height: 68vw !important;
-    min-height: 290px !important;
-    max-height: 400px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  /* schGrid takes all remaining height and scrolls vertically */
+  .schGrid {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: auto !important;
+    /* also allow horizontal scroll so Saturday is always reachable */
+    overflow-x: auto !important;
   }
 
   .schHeader {
     font-size: 11px !important;
     padding: 5px 8px !important;
+    flex-shrink: 0 !important;
   }
 
+  /* Day header row — fixed min-width so all 6 days are visible */
   .schDays {
-    grid-template-columns: 32px repeat(6, 1fr) !important;
+    /* 36px gutter + 6 × 48px columns = 324px minimum */
+    grid-template-columns: 36px repeat(6, minmax(48px, 1fr)) !important;
+    min-width: 324px !important;
+    overflow-x: visible !important;
+    flex-shrink: 0 !important;
   }
 
   .schDays__corner {
@@ -309,10 +341,12 @@ textarea {
   .schDays__day {
     height: 26px !important;
     font-size: 9px !important;
+    padding: 0 2px !important;
   }
 
+  /* Time gutter */
   .schTimes {
-    width: 32px !important;
+    width: 36px !important;
   }
 
   .schTimes__mark {
@@ -320,17 +354,28 @@ textarea {
     padding-left: 2px !important;
   }
 
+  /* Canvas: min-width keeps columns from squishing */
   .schCanvas {
-    margin-left: 32px !important;
+    margin-left: 36px !important;
+    min-width: calc(48px * 6) !important;
   }
 
+  .schCanvas__columns {
+    grid-template-columns: repeat(6, minmax(48px, 1fr)) !important;
+  }
+
+  /* Free-time strip: horizontal scroll, no wrapping */
   .schFreeStrip {
     padding: 6px 8px !important;
     gap: 5px !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    flex-shrink: 0 !important;
   }
 
   .schFreeCard {
-    min-width: 110px !important;
+    min-width: 100px !important;
+    flex-shrink: 0 !important;
     padding: 7px !important;
   }
 
@@ -590,10 +635,14 @@ textarea {
     font-size: 8px !important;
   }
 
-  .middlePanel {
-    height: 74vw !important;
-    min-height: 260px !important;
-    max-height: 340px !important;
+  .schDays {
+    grid-template-columns: 30px repeat(6, minmax(40px, 1fr)) !important;
+    min-width: 270px !important;
+  }
+
+  .schCanvas {
+    margin-left: 30px !important;
+    min-width: calc(40px * 6) !important;
   }
 
   .topNav__select {
