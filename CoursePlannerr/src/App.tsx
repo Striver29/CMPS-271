@@ -191,7 +191,7 @@ export default function App() {
   const [userId, setUserId] = useState<string | null>(null);
 
   // ── MOBILE: which panel is visible ──────────────────────────
-  const [mobileTab, setMobileTab] = useState<MobileTab>("search");
+  const [mobileTab, setMobileTab] = useState<MobileTab>("schedule");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -419,16 +419,16 @@ export default function App() {
       {/* ── MOBILE: tab switcher bar ── */}
       <div className="mobileTabs">
         <button
-          className={`mobileTab${mobileTab === "search" ? " isActive" : ""}`}
-          onClick={() => setMobileTab("search")}
-        >
-          🔍 Search
-        </button>
-        <button
           className={`mobileTab${mobileTab === "schedule" ? " isActive" : ""}`}
           onClick={() => setMobileTab("schedule")}
         >
           📅 Schedule
+        </button>
+        <button
+          className={`mobileTab${mobileTab === "search" ? " isActive" : ""}`}
+          onClick={() => setMobileTab("search")}
+        >
+          🔍 Search
         </button>
       </div>
 

@@ -321,8 +321,8 @@ textarea {
     padding: 6px 6px !important;
   }
 
-  /* Show the theme toggle emoji button */
-  .topNav__logout {
+  /* Show the theme toggle on mobile */
+  .topNav__themeToggle {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -331,8 +331,8 @@ textarea {
     flex-shrink: 0 !important;
   }
 
-  /* Hide the text Logout button — it is in the hamburger menu */
-  .topNav__controls .topNav__logout:last-child {
+  /* Hide the Logout text button — accessible via hamburger menu */
+  .topNav__logoutBtn {
     display: none !important;
   }
 

@@ -567,7 +567,7 @@ export function TopNav({
           </select>
 
           <button
-            className="topNav__logout"
+            className="topNav__logout topNav__themeToggle"
             type="button"
             onClick={toggleTheme}
             title="Toggle light/dark mode"
@@ -575,7 +575,7 @@ export function TopNav({
             {lightMode ? "🌙" : "☀️"}
           </button>
           <button
-            className="topNav__logout"
+            className="topNav__logout topNav__logoutBtn"
             type="button"
             onClick={async () => {
               await supabase.auth.signOut();
