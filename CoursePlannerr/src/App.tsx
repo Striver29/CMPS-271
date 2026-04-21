@@ -17,6 +17,24 @@ const COURSE_CACHE_PREFIX = "uniflow:courses:v2:";
 const TERMS_CACHE_KEY = "uniflow:terms";
 const EMPTY_COURSES: Course[] = [];
 
+// Decode HTML entities in course titles that may have been saved to Supabase
+// before the API-level fix was applied (e.g. "&amp;" → "&")
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s*&\s*/g, ' & ')
+    .trim();
+}
+
+function sanitizeCourse(course: Course): Course {
+  return { ...course, title: decodeHtmlEntities(course.title) };
+}
+
 type TermRecord = {
   code: string;
   description: string;
@@ -147,7 +165,7 @@ export default function App() {
     Promise.resolve().then(() => {
       if (cancelled) return;
       setAllCourses(
-        cachedCourses?.length ? mapApiCoursesToCourses(cachedCourses) : [],
+        cachedCourses?.length ? mapApiCoursesToCourses(cachedCourses).map(sanitizeCourse) : [],
       );
     });
 
@@ -158,7 +176,7 @@ export default function App() {
       .then((res) => res.json())
       .then((data: RawCourse[]) => {
         writeCachedJson(cacheKey, data);
-        setAllCourses(mapApiCoursesToCourses(data));
+        setAllCourses(mapApiCoursesToCourses(data).map(sanitizeCourse));
       })
       .catch((error) => {
         if (error?.name !== "AbortError" && !cachedCourses?.length) {
@@ -210,7 +228,7 @@ export default function App() {
         const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
         const loadedColors = new Map<string, string>();
         ((data ?? []) as SavedScheduleRow[]).forEach((row) => {
-          loaded[row.slot] = row.courses ?? [];
+          loaded[row.slot] = (row.courses ?? []).map(sanitizeCourse);
           if (row.colors) {
             Object.entries(row.colors).forEach(([id, color]) => {
               loadedColors.set(id, color);
@@ -233,7 +251,8 @@ export default function App() {
         setFavorites(
           (data as FavoriteRow[])
             .map((row) => row.course)
-            .filter((course): course is Course => Boolean(course)),
+            .filter((course): course is Course => Boolean(course))
+            .map(sanitizeCourse),
         );
       });
   }, [userId]);
