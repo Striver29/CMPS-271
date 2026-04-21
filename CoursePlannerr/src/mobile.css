@@ -1,0 +1,654 @@
+/* ============================================================
+   Uniflow — Mobile Responsive Styles
+   
+   SETUP (3 steps):
+   1. Copy this file to   CoursePlannerr/src/mobile.css
+   2. In main.tsx add:    import './mobile.css'
+   3. Confirm index.html has in <head>:
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+   TWO SMALL CODE CHANGES ALSO NEEDED (see comments below):
+   A) TopNav.tsx  — add hamburger button + isOpen toggle
+   B) App.tsx     — add mobileTabs bar between TopNav and mainContainer
+   ============================================================ */
+
+
+/* ============================================================
+   A) TOPNAV HAMBURGER — wire-up instructions
+
+   In TopNav.tsx, add inside the component:
+     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+   Add this button inside .topNav__brand (right after the logo/name):
+     <button
+       className="topNav__hamburger"
+       onClick={() => setMobileMenuOpen(o => !o)}
+       aria-label="Toggle menu"
+     >☰</button>
+
+   Change the <nav className="topNav__links"> to:
+     <nav className={`topNav__links${mobileMenuOpen ? ' isOpen' : ''}`}>
+   ============================================================ */
+
+.topNav__hamburger {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 7px;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  touch-action: manipulation;
+}
+
+
+/* ============================================================
+   B) MOBILE TABS — wire-up instructions
+
+   In App.tsx, add at top of component:
+     const [mobileTab, setMobileTab] = useState<'search'|'schedule'>('search');
+
+   Just before <div className="mainContainer"> add:
+     <div className="mobileTabs">
+       <button
+         className={`mobileTab${mobileTab==='search'?' isActive':''}`}
+         onClick={() => setMobileTab('search')}>
+         🔍 Search
+       </button>
+       <button
+         className={`mobileTab${mobileTab==='schedule'?' isActive':''}`}
+         onClick={() => setMobileTab('schedule')}>
+         📅 Schedule
+       </button>
+     </div>
+
+   Then wrap ScheduleGrid:
+     <div style={{ display: mobileTab === 'schedule' ? 'flex' : 'none', flexDirection: 'column', flex: 1 }}>
+       <ScheduleGrid ... />
+     </div>
+
+   And wrap RightSearchPanel:
+     <div style={{ display: mobileTab === 'search' ? 'flex' : 'none', flexDirection: 'column', flex: 1 }}>
+       <RightSearchPanel ... />
+     </div>
+   ============================================================ */
+
+.mobileTabs {
+  display: none;
+}
+
+.mobileTab {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  touch-action: manipulation;
+  min-height: 44px;
+}
+
+.mobileTab.isActive {
+  background: #A32638;
+  border-color: #A32638;
+  color: #fff;
+}
+
+
+/* ============================================================
+   TOUCH IMPROVEMENTS — all screen sizes
+   ============================================================ */
+
+button {
+  touch-action: manipulation;
+}
+
+.rightPanel__scroll,
+.schGrid,
+.schFreeStrip,
+.gpa-left,
+.emptyClassesContent,
+.ai-panel__messages {
+  -webkit-overflow-scrolling: touch;
+}
+
+.courseBlock,
+.resultItem,
+.resultAction,
+.resultMain,
+.resultFav,
+.schTab,
+.mobileTab {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS auto-zoom on input focus — font-size must be >= 16px */
+.searchBox,
+.g-in,
+.g-num,
+.g-sel,
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* Minimum touch target size */
+.resultAction,
+.resultFav,
+.g-del,
+.schTab,
+.topNav__hamburger {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+
+/* ============================================================
+   <= 900px — tablet: stack panels, hide left info panel
+   ============================================================ */
+@media (max-width: 900px) {
+
+  .appShell {
+    height: auto !important;
+    min-height: 100dvh;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+  }
+
+  .mainContainer {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .leftPanel {
+    display: none !important;
+  }
+
+  .middlePanel {
+    height: 55vw !important;
+    min-height: 360px !important;
+    max-height: 520px !important;
+    border-right: none !important;
+    flex-shrink: 0;
+  }
+
+  .rightPanel {
+    border-left: none !important;
+    flex: 1;
+    min-height: 420px;
+  }
+
+  /* Show hamburger, hide horizontal nav links */
+  .topNav__hamburger {
+    display: flex !important;
+  }
+
+  .topNav__links {
+    display: none !important;
+    flex-direction: column;
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    z-index: 500;
+    padding: 8px;
+    gap: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  .topNav__links.isOpen {
+    display: flex !important;
+  }
+
+  .topNav__links .topNav__link,
+  .topNav__links .topNav__linkButton {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    text-align: left;
+  }
+
+  .topNav__status {
+    display: none !important;
+  }
+
+  /* Mobile tab bar appears */
+  .mobileTabs {
+    display: flex !important;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 8px;
+    gap: 8px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 52px;
+    z-index: 100;
+  }
+
+  /* EmptyClasses: stack hero */
+  .emptyClassesHero,
+  .emptyClassesSummary {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* ============================================================
+   <= 600px — phone: tighten all components
+   ============================================================ */
+@media (max-width: 600px) {
+
+  /* ── Top Nav ── */
+  .topNav {
+    padding: 8px 10px !important;
+    gap: 8px !important;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+  }
+
+  .topNav__logo {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 13px !important;
+  }
+
+  .topNav__logout {
+    display: none !important;
+  }
+
+  .topNav__select {
+    max-width: 110px !important;
+    font-size: 12px !important;
+    padding: 5px 6px !important;
+  }
+
+  .topNav__controlLabel {
+    display: none !important;
+  }
+
+  /* ── Schedule ── */
+  .middlePanel {
+    height: 68vw !important;
+    min-height: 290px !important;
+    max-height: 400px !important;
+  }
+
+  .schHeader {
+    font-size: 11px !important;
+    padding: 5px 8px !important;
+  }
+
+  .schDays {
+    grid-template-columns: 32px repeat(6, 1fr) !important;
+  }
+
+  .schDays__corner {
+    height: 26px !important;
+  }
+
+  .schDays__day {
+    height: 26px !important;
+    font-size: 9px !important;
+  }
+
+  .schTimes {
+    width: 32px !important;
+  }
+
+  .schTimes__mark {
+    font-size: 9px !important;
+    padding-left: 2px !important;
+  }
+
+  .schCanvas {
+    margin-left: 32px !important;
+  }
+
+  .schFreeStrip {
+    padding: 6px 8px !important;
+    gap: 5px !important;
+  }
+
+  .schFreeCard {
+    min-width: 110px !important;
+    padding: 7px !important;
+  }
+
+  .schFreeCard__day {
+    font-size: 11px !important;
+  }
+
+  .schFreeChip {
+    font-size: 10px !important;
+    padding: 4px 6px !important;
+  }
+
+  /* ── Right panel ── */
+  .rightPanel__top {
+    padding: 8px !important;
+  }
+
+  .schTab {
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+  }
+
+  .miniStats {
+    gap: 4px !important;
+  }
+
+  .miniStats__item {
+    padding: 6px 6px !important;
+  }
+
+  .miniStats__label {
+    font-size: 10px !important;
+  }
+
+  .miniStats__value {
+    font-size: 13px !important;
+  }
+
+  /* ── GPA & Grade Calculator modals ── */
+  .gpa-modal {
+    max-height: 96dvh !important;
+    border-radius: 14px !important;
+  }
+
+  /* Stack two-column layout vertically */
+  .gpa-body {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+  }
+
+  .gpa-left {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Summary panel: wrap into a row */
+  .gpa-right {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    overflow-x: auto;
+  }
+
+  .gpa-right-title {
+    width: 100%;
+    margin-bottom: 0 !important;
+  }
+
+  .gpa-card {
+    min-width: 130px;
+    flex: 1;
+  }
+
+  .gpa-card-number {
+    font-size: 36px !important;
+    letter-spacing: -2px !important;
+  }
+
+  .gpa-stat-grid {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    flex: unset !important;
+    width: 100%;
+  }
+
+  .gpa-stat-row {
+    min-width: 80px;
+    flex: 1;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 8px !important;
+    gap: 2px;
+  }
+
+  .gpa-stat-val {
+    font-size: 14px !important;
+  }
+
+  /* Tighter input rows */
+  .gpa-row,
+  .gc-row {
+    grid-template-columns: 1fr 60px 50px 24px !important;
+    gap: 4px !important;
+    padding: 6px 7px !important;
+  }
+
+  .gpa-col-heads {
+    grid-template-columns: 1fr 60px 50px 24px !important;
+    gap: 4px !important;
+  }
+
+  /* Restore readable font inside rows (overriding the 16px iOS zoom fix) */
+  .gpa-row .g-in,
+  .gc-row .g-in,
+  .gpa-row .g-num,
+  .gc-row .g-num,
+  .gpa-row .g-sel,
+  .gc-row .g-sel {
+    font-size: 13px !important;
+  }
+
+  .gpa-footer {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+
+  .gpa-btn-reset {
+    padding: 8px 14px !important;
+    font-size: 12px !important;
+  }
+
+  /* Grade result card — stack on very small screens */
+  .gc-result {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .gc-result-pct {
+    font-size: 22px !important;
+  }
+
+  .gc-result-letter {
+    font-size: 28px !important;
+  }
+
+  /* ── AI assistant ── */
+  .ai-fab {
+    bottom: 18px !important;
+    right: 12px !important;
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+  }
+
+  .ai-panel {
+    width: calc(100vw - 18px) !important;
+    right: 9px !important;
+    bottom: 70px !important;
+    height: 65dvh !important;
+    border-radius: 14px !important;
+  }
+
+  /* ── Course search modal in RightSearchPanel ── */
+  /* The inline-style modal box already has width:90% — just ensure it's tall enough */
+  .gpa-overlay {
+    padding: 10px !important;
+    align-items: flex-end !important; /* slide up from bottom on mobile */
+  }
+
+  /* ── Login page ── */
+  .uf-card {
+    padding: 28px 18px !important;
+    border-radius: 14px !important;
+  }
+
+  /* ── AdminPortal stats: 2-col ── */
+  /* The stats grid uses inline style gridTemplateColumns: "repeat(4,1fr)"
+     We can't override inline styles with a class selector, so this targets
+     the known structure. Add className="adminStatGrid" to that div in AdminPortal.tsx
+     for a cleaner override. */
+  .adminStatGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* AdminPortal table rows: stack as card on mobile.
+     Add className="adminTableRow" to each row div in AdminPortal.tsx */
+  .adminTableRow {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    padding: 14px 16px !important;
+  }
+
+  /* AdminPortal column headers: hide on mobile */
+  .adminTableHeader {
+    display: none !important;
+  }
+
+  /* ── EmptyClasses ── */
+  .emptyClassesContent {
+    padding: 12px !important;
+    gap: 12px !important;
+  }
+
+  .emptyClassesHero__copy {
+    padding: 16px !important;
+  }
+
+  .roomCard__title {
+    font-size: 1.4rem !important;
+  }
+
+  .roomCard__meta {
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+
+  /* Reviews page: full-width search */
+  .reviewsSearchBox {
+    width: 100% !important;
+    font-size: 16px !important;
+  }
+
+  /* CourseForm: stack inputs vertically */
+  .courseFormRow {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .courseFormRow input,
+  .courseFormRow select,
+  .courseFormRow button {
+    width: 100% !important;
+  }
+
+  /* Courses table: horizontal scroll */
+  .coursesTableWrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+
+/* ============================================================
+   <= 420px — very small phones
+   ============================================================ */
+@media (max-width: 420px) {
+
+  .schDays__day {
+    font-size: 8px !important;
+  }
+
+  .schTimes__mark {
+    font-size: 8px !important;
+  }
+
+  .middlePanel {
+    height: 74vw !important;
+    min-height: 260px !important;
+    max-height: 340px !important;
+  }
+
+  .topNav__select {
+    max-width: 90px !important;
+  }
+
+  .schTab {
+    font-size: 11px !important;
+    padding: 5px 6px !important;
+  }
+
+  .gpa-row,
+  .gc-row {
+    grid-template-columns: 1fr 54px 46px 22px !important;
+  }
+}
+
+
+/* ============================================================
+   MOBILE PANEL TOGGLE
+   Controls which panel (schedule vs search) is visible on mobile.
+   The wrappers use display:contents so they don't break the grid
+   on desktop — on mobile we override the children directly.
+   ============================================================ */
+
+@media (max-width: 900px) {
+  /* Hide schedule panel when search tab is active */
+  .mobilePanel--schedule:not(.isVisible) .middlePanel {
+    display: none !important;
+  }
+
+  /* Hide search panel when schedule tab is active */
+  .mobilePanel--search:not(.isVisible) .rightPanel {
+    display: none !important;
+  }
+
+  /* Logout option visible inside hamburger menu on mobile */
+  .topNav__logoutMobile {
+    display: flex !important;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    padding-top: 8px !important;
+    color: var(--muted) !important;
+  }
+}
+
+@media (min-width: 901px) {
+  /* On desktop: always show both panels regardless of tab state */
+  .mobilePanel--schedule .middlePanel,
+  .mobilePanel--search .rightPanel {
+    display: flex !important;
+  }
+
+  /* Hide logout from mobile menu on desktop — already in topNav__controls */
+  .topNav__logoutMobile {
+    display: none !important;
+  }
+}

@@ -46,9 +46,19 @@ export function TopNav({
   lastUpdatedText,
   scheduledCourses,
   onSemesterChange,
-  activePage = 'home',
+  activePage = "home",
 }: Props) {
   const navigate = useNavigate();
+
+  // ── MOBILE: hamburger state ──────────────────────────────
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close menu on route change / outside click
+  useEffect(() => {
+    const handler = () => setMobileMenuOpen(false);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   const [showGpa, setShowGpa] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -231,21 +241,23 @@ export function TopNav({
           ],
     );
     setShowGpa(true);
+    setMobileMenuOpen(false);
   };
 
   const openGradeCalculator = () => {
     setGradeRows(defaultGradeRows());
     setShowGrade(true);
+    setMobileMenuOpen(false);
   };
 
   const goHome = () => {
+    setMobileMenuOpen(false);
     if (activePage === "home") {
       document
         .querySelector(".middlePanel")
         ?.scrollIntoView({ behavior: "smooth" });
       return;
     }
-
     navigate("/");
   };
 
@@ -466,9 +478,24 @@ export function TopNav({
           >
             <span className="topNav__brandText">{appName}</span>
           </button>
+
+          {/* ── MOBILE: hamburger button ── */}
+          <button
+            type="button"
+            className="topNav__hamburger"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? "✕" : "☰"}
+          </button>
         </div>
 
-        <nav className="topNav__links" aria-label="Primary">
+        {/* ── Nav links — toggled by isOpen on mobile ── */}
+        <nav
+          className={`topNav__links${mobileMenuOpen ? " isOpen" : ""}`}
+          aria-label="Primary"
+        >
           <button
             type="button"
             className={`topNav__link topNav__linkButton${activePage === "home" ? " isActive" : ""}`}
@@ -479,14 +506,14 @@ export function TopNav({
           <button
             type="button"
             className="topNav__link topNav__linkButton"
-            onClick={() => navigate("/reviews")}
+            onClick={() => { navigate("/reviews"); setMobileMenuOpen(false); }}
           >
             Reviews
           </button>
           <button
             type="button"
             className={`topNav__link topNav__linkButton${activePage === "empty-classes" ? " isActive" : ""}`}
-            onClick={() => navigate("/empty-classes")}
+            onClick={() => { navigate("/empty-classes"); setMobileMenuOpen(false); }}
           >
             <MeetingRoomOutlinedIcon fontSize="inherit" />
             Empty Classes
@@ -510,11 +537,23 @@ export function TopNav({
               type="button"
               className="topNav__link topNav__linkButton"
               style={{ cursor: "pointer", color: "#A32638", fontWeight: 700 }}
-              onClick={() => navigate("/admin")}
+              onClick={() => { navigate("/admin"); setMobileMenuOpen(false); }}
             >
               Admin
             </button>
           )}
+
+          {/* ── Logout inside the mobile menu ── */}
+          <button
+            className="topNav__link topNav__linkButton topNav__logoutMobile"
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate("/login");
+            }}
+          >
+            Logout
+          </button>
         </nav>
 
         <div className="topNav__status" title={lastUpdatedText}>

@@ -40,6 +40,9 @@ type FavoriteRow = {
   course: Course | null;
 };
 
+// ── Mobile tab type ──────────────────────────────────────────
+type MobileTab = "search" | "schedule";
+
 const Login = lazy(() => import("./pages/Login"));
 const Reviews = lazy(() => import("./pages/Reviews"));
 const EmptyClasses = lazy(() => import("./pages/EmptyClasses.tsx"));
@@ -61,7 +64,7 @@ function writeCachedJson(key: string, value: unknown) {
   try {
     sessionStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Storage can fail in private mode or if quota is exhausted. The app still works without it.
+    // Storage can fail in private mode or if quota is exhausted.
   }
 }
 
@@ -186,6 +189,9 @@ export default function App() {
     3: [],
   });
   const [userId, setUserId] = useState<string | null>(null);
+
+  // ── MOBILE: which panel is visible ──────────────────────────
+  const [mobileTab, setMobileTab] = useState<MobileTab>("search");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -409,7 +415,25 @@ export default function App() {
         scheduledCourses={scheduled}
         activePage="home"
       />
+
+      {/* ── MOBILE: tab switcher bar ── */}
+      <div className="mobileTabs">
+        <button
+          className={`mobileTab${mobileTab === "search" ? " isActive" : ""}`}
+          onClick={() => setMobileTab("search")}
+        >
+          🔍 Search
+        </button>
+        <button
+          className={`mobileTab${mobileTab === "schedule" ? " isActive" : ""}`}
+          onClick={() => setMobileTab("schedule")}
+        >
+          📅 Schedule
+        </button>
+      </div>
+
       <div className="mainContainer">
+        {/* Left info panel — hidden on mobile via CSS */}
         <LeftInfoPanel
           activeTab={activeLeftTab}
           onTabChange={setActiveLeftTab}
@@ -417,32 +441,48 @@ export default function App() {
           selectedCrns={selectedCrns}
         />
 
-<ScheduleGrid
-  courses={scheduled}
-  hoveredCourse={hoveredCourse}
-  scheduledIds={scheduledIds}
-  courseColorMap={courseColorMap}
-  onSelectCourse={selectCourse}
-  onHoverCourse={handleHoverCourse}
-  onColorChange={handleColorChange}
-  semesterLabel={semesterLabel}
-/>
+        {/* Schedule — hidden on mobile when search tab is active */}
+        <div
+          style={{
+            display: "contents",
+          }}
+          className={`mobilePanel mobilePanel--schedule${mobileTab === "schedule" ? " isVisible" : ""}`}
+        >
+          <ScheduleGrid
+            courses={scheduled}
+            hoveredCourse={hoveredCourse}
+            scheduledIds={scheduledIds}
+            courseColorMap={courseColorMap}
+            onSelectCourse={selectCourse}
+            onHoverCourse={handleHoverCourse}
+            onColorChange={handleColorChange}
+            semesterLabel={semesterLabel}
+          />
+        </div>
 
-
-        <RightSearchPanel
-          allCourses={allCourses}
-          scheduled={scheduled}
-          favorites={favorites}
-          onSelectCourse={selectCourse}
-          onToggleSchedule={toggleSchedule}
-          onToggleFavorite={toggleFavorite}
-          onHoverCourse={handleHoverCourse}
-          averageDifficulty={averageDifficulty}
-          totalCredits={totalCredits}
-          activeSlot={activeSlot}
-          onSlotChange={setActiveSlot}
-        />
+        {/* Search — hidden on mobile when schedule tab is active */}
+        <div
+          style={{
+            display: "contents",
+          }}
+          className={`mobilePanel mobilePanel--search${mobileTab === "search" ? " isVisible" : ""}`}
+        >
+          <RightSearchPanel
+            allCourses={allCourses}
+            scheduled={scheduled}
+            favorites={favorites}
+            onSelectCourse={selectCourse}
+            onToggleSchedule={toggleSchedule}
+            onToggleFavorite={toggleFavorite}
+            onHoverCourse={handleHoverCourse}
+            averageDifficulty={averageDifficulty}
+            totalCredits={totalCredits}
+            activeSlot={activeSlot}
+            onSlotChange={setActiveSlot}
+          />
+        </div>
       </div>
+
       <AIScheduler
         allCourses={allCourses}
         scheduledCourses={scheduled}
