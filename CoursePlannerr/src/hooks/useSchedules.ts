@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@clerk/clerk-react';
 import type { Course } from '../types';
 import { useSupabase } from './useSupabase';
+import { useAppUser } from './useAppUser';
 
 export function useSchedules() {
   const supabase = useSupabase();
-  const { user } = useUser();
-  const userId = user?.id ?? null;
+  const { appUserId: userId } = useAppUser();
   const [activeSlot, setActiveSlot] = useState(1);
   const [schedules, setSchedules] = useState<Record<number, Course[]>>({ 1: [], 2: [], 3: [] });
 

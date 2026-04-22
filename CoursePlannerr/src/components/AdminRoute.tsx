@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "@clerk/clerk-react";
 import { useSupabase } from "../hooks/useSupabase.ts";
+import { useAppUser } from "../hooks/useAppUser.ts";
 
 export default function AdminRoute({
   children,
@@ -10,13 +10,13 @@ export default function AdminRoute({
 }) {
   const navigate = useNavigate();
   const supabase = useSupabase();
-  const { isLoaded, user } = useUser();
+  const { appUserId, loading } = useAppUser();
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    if (!user) {
+    if (loading) return;
+    if (!appUserId) {
       navigate("/login");
       return;
     }
@@ -26,7 +26,7 @@ export default function AdminRoute({
         const { data: profile } = await supabase
           .from("profiles")
           .select("is_admin")
-          .eq("id", user.id)
+          .eq("id", appUserId)
           .single();
         if (profile?.is_admin) {
           setAllowed(true);
@@ -41,7 +41,7 @@ export default function AdminRoute({
     }
 
     checkAdmin();
-  }, [isLoaded, navigate, supabase, user]);
+  }, [appUserId, loading, navigate, supabase]);
 
   if (checking) {
     return (

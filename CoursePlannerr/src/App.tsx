@@ -1,6 +1,5 @@
 import { Suspense, lazy, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
-import { useUser } from "@clerk/clerk-react";
 import "./App.css";
 import type { Course } from "./types";
 import { TopNav } from "./components/TopNav";
@@ -12,6 +11,7 @@ import { AIScheduler } from "./components/AiScheduler.tsx";
 import AdminRoute from "./components/AdminRoute";
 import { mapApiCoursesToCourses } from "./utils/courseApi.ts";
 import { useSupabase } from "./hooks/useSupabase.ts";
+import { useAppUser } from "./hooks/useAppUser.ts";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const COURSE_CACHE_PREFIX = "uniflow:courses:v2:";
@@ -125,8 +125,7 @@ const COURSE_COLORS = [
 export default function App() {
   const appName = "UniFlow";
   const supabase = useSupabase();
-  const { user } = useUser();
-  const userId = user?.id ?? null;
+  const { appUserId: userId } = useAppUser();
   const initialTerms = useMemo(
     () => readCachedJson<TermRecord[]>(TERMS_CACHE_KEY) ?? [],
     [],

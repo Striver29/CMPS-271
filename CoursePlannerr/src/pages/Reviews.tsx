@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useUser } from "@clerk/clerk-react";
 import { useSupabase } from "../hooks/useSupabase.ts";
+import { useAppUser } from "../hooks/useAppUser.ts";
 
 const API = import.meta.env.VITE_API_URL || "";
 console.log("API URL:", API);
@@ -595,15 +595,12 @@ function SentimentPanel({ sentiment }: { sentiment: ReturnType<typeof getSentime
 
 export default function Reviews() {
   const supabase = useSupabase();
-  const { isLoaded, user } = useUser();
+  const { appUserId: userId, loading: authLoading } = useAppUser();
   const suppressProfSearch = useRef(false);
   const suppressCourseSearch = useRef(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>("courses");
-
-  const userId = user?.id ?? null;
-  const authLoading = !isLoaded;
 
   const [courseSearch, setCourseSearch] = useState("");
   const [courseResults, setCourseResults] = useState<{ department: string; course_number: string; title: string }[]>([]);

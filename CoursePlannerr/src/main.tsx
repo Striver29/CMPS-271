@@ -5,6 +5,8 @@ import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
 import './mobile.css'
 import App from './App'
+import { SupabaseProvider } from './hooks/useSupabase'
+import { AppUserProvider } from './hooks/useAppUser'
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -15,9 +17,13 @@ if (!clerkPublishableKey) {
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <ClerkProvider publishableKey={clerkPublishableKey}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <SupabaseProvider>
+        <AppUserProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </AppUserProvider>
+      </SupabaseProvider>
     </ClerkProvider>
   </React.StrictMode>
 )

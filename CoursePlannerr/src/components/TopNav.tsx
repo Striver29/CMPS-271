@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserButton, useClerk, useUser } from "@clerk/clerk-react";
+import { UserButton, useClerk } from "@clerk/clerk-react";
 import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
 import { useSupabase } from "../hooks/useSupabase.ts";
+import { useAppUser } from "../hooks/useAppUser.ts";
 import { gradePointsMap, calculateGPA } from "../gpaCalculator";
 import type { Course } from "../types";
 
@@ -52,7 +53,7 @@ export function TopNav({
   const navigate = useNavigate();
   const supabase = useSupabase();
   const { signOut } = useClerk();
-  const { user } = useUser();
+  const { appUserId } = useAppUser();
 
   // ── MOBILE: hamburger state ──────────────────────────────
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -86,19 +87,19 @@ export function TopNav({
   const gradePoints = gradePointsMap;
 
   useEffect(() => {
-    if (!user) {
+    if (!appUserId) {
       Promise.resolve().then(() => setIsAdmin(false));
       return;
     }
     supabase
       .from("profiles")
       .select("is_admin")
-      .eq("id", user.id)
+      .eq("id", appUserId)
       .single()
       .then(({ data: profile }) => {
         setIsAdmin(profile?.is_admin ?? false);
       });
-  }, [supabase, user]);
+  }, [supabase, appUserId]);
 
   const gpa = (() => {
     const mapped = rows
