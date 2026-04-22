@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserButton, useClerk } from "@clerk/clerk-react";
+import { UserButton, useClerk, useUser } from "@clerk/clerk-react";
 import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
 import { useSupabase } from "../hooks/useSupabase.ts";
 import { useAppUser } from "../hooks/useAppUser.ts";
@@ -17,6 +17,35 @@ type Props = {
   scheduledCourses: Course[];
   activePage?: "home" | "empty-classes";
 };
+
+type AdminRow = {
+  is_admin: boolean | null;
+};
+
+type ClerkMetadata = {
+  role?: unknown;
+  is_admin?: unknown;
+  admin?: unknown;
+};
+
+const ADMIN_EMAILS = new Set(
+  (import.meta.env.VITE_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email: string) => email.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+const ADMIN_CLERK_IDS = new Set(
+  (import.meta.env.VITE_ADMIN_CLERK_IDS ?? "")
+    .split(",")
+    .map((id: string) => id.trim())
+    .filter(Boolean),
+);
+
+function hasAdminMetadata(metadata: ClerkMetadata | undefined) {
+  if (!metadata) return false;
+  return metadata.role === "admin" || metadata.is_admin === true || metadata.admin === true;
+}
 
 function scoreToLetter(pct) {
   if (pct >= 93) return "A+";
@@ -53,7 +82,8 @@ export function TopNav({
   const navigate = useNavigate();
   const supabase = useSupabase();
   const { signOut } = useClerk();
-  const { appUserId } = useAppUser();
+  const { user } = useUser();
+  const { appUserId, clerkUserId, email } = useAppUser();
 
   // ── MOBILE: hamburger state ──────────────────────────────
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -91,15 +121,27 @@ export function TopNav({
       Promise.resolve().then(() => setIsAdmin(false));
       return;
     }
+
+    const normalizedEmail = email?.toLowerCase() ?? "";
+    const clerkAllowsAdmin =
+      Boolean(normalizedEmail && ADMIN_EMAILS.has(normalizedEmail)) ||
+      Boolean(clerkUserId && ADMIN_CLERK_IDS.has(clerkUserId)) ||
+      hasAdminMetadata(user?.publicMetadata as ClerkMetadata | undefined);
+
+    if (clerkAllowsAdmin) {
+      Promise.resolve().then(() => setIsAdmin(true));
+      return;
+    }
+
     supabase
-      .from("profiles")
+      .from("users")
       .select("is_admin")
       .eq("id", appUserId)
-      .single()
-      .then(({ data: profile }) => {
-        setIsAdmin(profile?.is_admin ?? false);
+      .maybeSingle<AdminRow>()
+      .then(({ data: userRow }) => {
+        setIsAdmin(userRow?.is_admin ?? false);
       });
-  }, [supabase, appUserId]);
+  }, [supabase, appUserId, clerkUserId, email, user?.publicMetadata]);
 
   const gpa = (() => {
     const mapped = rows

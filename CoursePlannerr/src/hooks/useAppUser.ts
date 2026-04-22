@@ -13,6 +13,37 @@ type UserRow = {
   id: string;
 };
 
+function isUuid(value: string | null) {
+  return Boolean(
+    value &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
+  );
+}
+
+function setUuidAppUserId(
+  id: string | null,
+  setAppUserId: (id: string | null) => void,
+  context: string,
+) {
+  if (!id) {
+    setAppUserId(null);
+    return false;
+  }
+
+  if (!isUuid(id)) {
+    console.error(
+      `${context}: expected public.users.id to be a UUID, but got ${id}. Fix the users table mapping before saving user-owned data.`,
+    );
+    setAppUserId(null);
+    return false;
+  }
+
+  setAppUserId(id);
+  return true;
+}
+
 function getPrimaryEmail(user: ReturnType<typeof useUser>["user"]) {
   return user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? null;
 }
@@ -50,7 +81,7 @@ export function AppUserProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       if (existing?.id) {
-        setAppUserId(existing.id);
+        setUuidAppUserId(existing.id, setAppUserId, "Clerk user lookup");
         setLoading(false);
         if (!selectError) {
           void supabase
@@ -88,7 +119,7 @@ export function AppUserProvider({ children }: { children: ReactNode }) {
           console.error("Could not attach Clerk user to existing Supabase user:", updateError);
           setAppUserId(null);
         } else {
-          setAppUserId(existingByEmail.id);
+          setUuidAppUserId(existingByEmail.id, setAppUserId, "Email user lookup");
         }
         setLoading(false);
         return;
@@ -119,7 +150,7 @@ export function AppUserProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       if (created?.id) {
-        setAppUserId(created.id);
+        setUuidAppUserId(created.id, setAppUserId, "Created user lookup");
       } else {
         const { data: rowAfterConflict } = await supabase
           .from("users")
@@ -128,7 +159,7 @@ export function AppUserProvider({ children }: { children: ReactNode }) {
           .maybeSingle<UserRow>();
 
         if (rowAfterConflict?.id) {
-          setAppUserId(rowAfterConflict.id);
+          setUuidAppUserId(rowAfterConflict.id, setAppUserId, "Conflict user lookup");
         } else {
           const { data: emailRowAfterConflict } = await supabase
             .from("users")
@@ -141,7 +172,7 @@ export function AppUserProvider({ children }: { children: ReactNode }) {
               .from("users")
               .update({ clerk_user_id: clerkUserId })
               .eq("id", emailRowAfterConflict.id);
-            setAppUserId(emailRowAfterConflict.id);
+            setUuidAppUserId(emailRowAfterConflict.id, setAppUserId, "Conflict email lookup");
           } else {
             console.error("Could not create Supabase user for Clerk user:", insertError);
             setAppUserId(null);

@@ -50,14 +50,35 @@ type RawCourse = Record<string, unknown>;
 type SavedScheduleRow = {
   slot: number;
   courses: Course[] | null;
-  colors: Record<string, string> | null;
+  colors?: Record<string, string> | null;
+};
+
+type SchedulePayload = {
+  user_id: string;
+  term_id: string;
+  slot: number;
+  courses: Course[];
+  colors: Record<string, string>;
+  updated_at: string;
 };
 
 type FavoriteRow = {
-  course: Course | null;
+  course_id?: string | null;
+};
+
+type FavoriteLookupRow = {
+  course_id: string;
 };
 
 type MobileTab = "search" | "schedule";
+
+function isMissingConflictTargetError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P10" ||
+    /no unique|no exclusion|conflict target|constraint/i.test(error.message ?? "")
+  );
+}
 
 const Login = lazy(() => import("./pages/Login"));
 const Reviews = lazy(() => import("./pages/Reviews"));
@@ -125,7 +146,8 @@ const COURSE_COLORS = [
 export default function App() {
   const appName = "UniFlow";
   const supabase = useSupabase();
-  const { appUserId: userId } = useAppUser();
+  const { appUserId, loading: appUserLoading } = useAppUser();
+  const userId = appUserId ?? null;
   const initialTerms = useMemo(
     () => readCachedJson<TermRecord[]>(TERMS_CACHE_KEY) ?? [],
     [],
@@ -205,7 +227,44 @@ export default function App() {
 
   const [mobileTab, setMobileTab] = useState<MobileTab>("schedule");
 
+  // Load schedules — filtered by term_id
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadSchedules() {
+      if (!userId || !semesterId) return;
+
+      const result = await supabase
+        .from("schedules")
+        .select("slot, courses, colors")
+        .eq("user_id", userId)
+        .eq("term_id", semesterId);
+
+      if (cancelled) return;
+
+      if (result.error) {
+        console.error("Could not load schedules:", result.error);
+        return;
+      }
+
+      const rows = result.data as SavedScheduleRow[] | null;
+      const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
+      const loadedColors = new Map<string, string>();
+
+      (rows ?? []).forEach((row) => {
+        loaded[row.slot] = (row.courses ?? []).map(sanitizeCourse);
+        if (row.colors) {
+          Object.entries(row.colors).forEach(([id, color]) => {
+            loadedColors.set(id, color);
+          });
+        }
+      });
+
+      setSchedules(loaded);
+      setCustomColors(loadedColors);
+    }
+
+    if (appUserLoading) return;
     if (!userId || !semesterId) {
       Promise.resolve().then(() => {
         setSchedules({ 1: [], 2: [], 3: [] });
@@ -213,84 +272,175 @@ export default function App() {
       });
       return;
     }
-    supabase
-      .from("schedules")
-      .select("slot, courses, colors")
-      .eq("user_id", userId)
-      .eq("term_id", semesterId)
-      .then(({ data }) => {
-        const loaded: Record<number, Course[]> = { 1: [], 2: [], 3: [] };
-        const loadedColors = new Map<string, string>();
-        ((data ?? []) as SavedScheduleRow[]).forEach((row) => {
-          loaded[row.slot] = (row.courses ?? []).map(sanitizeCourse);
-          if (row.colors) {
-            Object.entries(row.colors).forEach(([id, color]) => {
-              loadedColors.set(id, color);
-            });
-          }
-        });
-        setSchedules(loaded);
-        setCustomColors(loadedColors);
-      });
-  }, [supabase, userId, semesterId]);
+    void loadSchedules();
 
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId, semesterId, appUserLoading]);
+
+  // Load favorites — wait for allCourses to be ready before resolving course objects
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadFavorites() {
+      if (!userId) return;
+
+      const result = await supabase
+        .from("favorites")
+        .select("course_id")
+        .eq("user_id", userId);
+
+      if (cancelled) return;
+
+      if (result.error) {
+        console.error("Could not load favorites:", result.error);
+        return;
+      }
+
+      const rows = result.data as FavoriteRow[] | null;
+
+      setFavorites(
+        (rows ?? [])
+          .map((row) => allCourses.find((course) => course.id === row.course_id) ?? null)
+          .filter((course): course is Course => Boolean(course))
+          .map(sanitizeCourse),
+      );
+    }
+
+    if (appUserLoading) return;
     if (!userId) {
       Promise.resolve().then(() => setFavorites([]));
       return;
     }
-    supabase
-      .from("favorites")
-      .select("course")
-      .eq("user_id", userId)
-      .then(({ data }) => {
-        if (!data) return;
-        setFavorites(
-          (data as FavoriteRow[])
-            .map((row) => row.course)
-            .filter((course): course is Course => Boolean(course))
-            .map(sanitizeCourse),
-        );
-      });
-  }, [supabase, userId]);
+    // Wait until courses are loaded so we can resolve course objects from IDs
+    if (!allCourses.length) return;
 
+    void loadFavorites();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId, appUserLoading, allCourses]);
+
+  // Save a schedule slot — always includes term_id
   const saveSlot = useCallback(
     async (slot: number, courses: Course[], colors?: Map<string, string>) => {
-      if (!userId || !semesterId) return;
-      const colorsObj = colors
-        ? Object.fromEntries(colors)
-        : Object.fromEntries(customColors);
-      await supabase.from("schedules").upsert(
-        {
-          user_id: userId,
-          term_id: semesterId,
-          slot,
-          courses,
-          colors: colorsObj,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,slot,term_id" },
-      );
+      if (!userId || !semesterId) {
+        console.warn("Skipped schedule save because the user or semester is not ready yet.");
+        return false;
+      }
+
+      const payload: SchedulePayload = {
+        user_id: userId,
+        term_id: semesterId,
+        slot,
+        courses,
+        colors: colors ? Object.fromEntries(colors) : Object.fromEntries(customColors),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upsertError } = await supabase
+        .from("schedules")
+        .upsert(payload, { onConflict: "user_id,slot,term_id" });
+
+      if (!upsertError) return true;
+
+      // Fallback: if upsert conflict target fails, do manual check-then-write
+      if (isMissingConflictTargetError(upsertError)) {
+        const { data: existing, error: lookupError } = await supabase
+          .from("schedules")
+          .select("slot")
+          .eq("user_id", userId)
+          .eq("term_id", semesterId)
+          .eq("slot", slot)
+          .maybeSingle<{ slot: number }>();
+
+        if (lookupError) {
+          console.error("Could not check existing schedule:", lookupError);
+          return false;
+        }
+
+        const { error: writeError } = existing
+          ? await supabase
+              .from("schedules")
+              .update(payload)
+              .eq("user_id", userId)
+              .eq("term_id", semesterId)
+              .eq("slot", slot)
+          : await supabase.from("schedules").insert(payload);
+
+        if (writeError) {
+          console.error("Could not save schedule:", writeError);
+          return false;
+        }
+
+        return true;
+      }
+
+      console.error("Could not save schedule:", upsertError);
+      return false;
     },
     [supabase, userId, semesterId, customColors],
   );
 
   const toggleFavorite = useCallback(
     async (course: Course) => {
-      if (!userId) return;
+      if (!userId) {
+        console.warn("Skipped favorite save because the user is not ready yet.");
+        return;
+      }
+
       const exists = favorites.some((c) => c.id === course.id);
+
       if (exists) {
+        const previousFavorites = favorites;
         setFavorites((prev) => prev.filter((c) => c.id !== course.id));
-        await supabase
+        const { error } = await supabase
           .from("favorites")
           .delete()
           .eq("user_id", userId)
           .eq("course_id", course.id);
+        if (error) {
+          console.error("Could not remove favorite:", error);
+          setFavorites(previousFavorites);
+        }
       } else {
+        const previousFavorites = favorites;
         setFavorites((prev) => [...prev, course]);
-        await supabase
+
+        const payload = { user_id: userId, course_id: course.id };
+        const { error: upsertError } = await supabase
           .from("favorites")
-          .insert({ user_id: userId, course_id: course.id, course });
+          .upsert(payload, { onConflict: "user_id,course_id" });
+
+        let writeError = upsertError;
+
+        // Fallback: if upsert conflict target fails, do manual check-then-write
+        if (isMissingConflictTargetError(upsertError)) {
+          const { data: existing, error: lookupError } = await supabase
+            .from("favorites")
+            .select("course_id")
+            .eq("user_id", userId)
+            .eq("course_id", course.id)
+            .maybeSingle<FavoriteLookupRow>();
+
+          if (lookupError) {
+            writeError = lookupError;
+          } else if (existing) {
+            writeError = null;
+          } else {
+            const { error: insertError } = await supabase
+              .from("favorites")
+              .insert(payload);
+            writeError = insertError;
+          }
+        }
+
+        if (writeError) {
+          console.error("Could not save favorite:", writeError);
+          setFavorites(previousFavorites);
+        }
       }
     },
     [supabase, userId, favorites],
@@ -309,7 +459,7 @@ export default function App() {
       : [...current, course];
     const newSchedules = { ...schedules, [activeSlot]: updated };
     setSchedules(newSchedules);
-    saveSlot(activeSlot, updated);
+    void saveSlot(activeSlot, updated);
     if (!exists) {
       const alreadyFav = favorites.some((f) => f.id === course.id);
       if (!alreadyFav) toggleFavorite(course);
@@ -377,7 +527,7 @@ export default function App() {
   const handleColorChange = (courseId: string, color: string) => {
     const updated = new Map(customColors).set(courseId, color);
     setCustomColors(updated);
-    saveSlot(activeSlot, scheduled, updated);
+    void saveSlot(activeSlot, scheduled, updated);
   };
 
   const displayedCourse = hoveredCourse ?? selectedCourse;
@@ -399,14 +549,14 @@ export default function App() {
     const mergedCourses = [...current, ...coursesToAdd];
     const newSchedules = { ...schedules, [activeSlot]: mergedCourses };
     setSchedules(newSchedules);
-    saveSlot(activeSlot, mergedCourses);
+    void saveSlot(activeSlot, mergedCourses);
     coursesToAdd.forEach((c) => {
       const alreadyFav = favorites.some((f) => f.id === c.id);
       if (!alreadyFav) toggleFavorite(c);
     });
   };
 
-  const mainApp = (
+  const mainApp = appUserLoading ? <PageFallback /> : (
     <div className="appShell" style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <TopNav
         appName={appName}
