@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { UserButton, useClerk, useUser } from "@clerk/clerk-react";
 import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
-import { supabase } from "../supabaseClient.ts";
+import { useSupabase } from "../hooks/useSupabase.ts";
 import { gradePointsMap, calculateGPA } from "../gpaCalculator";
 import type { Course } from "../types";
 
@@ -49,6 +50,9 @@ export function TopNav({
   activePage = "home",
 }: Props) {
   const navigate = useNavigate();
+  const supabase = useSupabase();
+  const { signOut } = useClerk();
+  const { user } = useUser();
 
   // ── MOBILE: hamburger state ──────────────────────────────
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -82,16 +86,19 @@ export function TopNav({
   const gradePoints = gradePointsMap;
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", data.user.id)
-        .single();
-      setIsAdmin(profile?.is_admin ?? false);
-    });
-  }, []);
+    if (!user) {
+      Promise.resolve().then(() => setIsAdmin(false));
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", user.id)
+      .single()
+      .then(({ data: profile }) => {
+        setIsAdmin(profile?.is_admin ?? false);
+      });
+  }, [supabase, user]);
 
   const gpa = (() => {
     const mapped = rows
@@ -537,7 +544,7 @@ export function TopNav({
             className="topNav__link topNav__linkButton topNav__logoutMobile"
             type="button"
             onClick={async () => {
-              await supabase.auth.signOut();
+              await signOut();
               navigate("/login");
             }}
           >
@@ -574,11 +581,12 @@ export function TopNav({
           >
             {lightMode ? "🌙" : "☀️"}
           </button>
+          <UserButton />
           <button
             className="topNav__logout topNav__logoutBtn"
             type="button"
             onClick={async () => {
-              await supabase.auth.signOut();
+              await signOut();
               navigate("/login");
             }}
           >

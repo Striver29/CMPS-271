@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../supabaseClient.ts";
+import { useUser } from "@clerk/clerk-react";
+import { useSupabase } from "../hooks/useSupabase.ts";
 
 export default function AdminRoute({
   children,
@@ -8,28 +9,39 @@ export default function AdminRoute({
   children: React.ReactNode;
 }) {
   const navigate = useNavigate();
+  const supabase = useSupabase();
+  const { isLoaded, user } = useUser();
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) {
+    if (!isLoaded) return;
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    async function checkAdmin() {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_admin")
+          .eq("id", user.id)
+          .single();
+        if (profile?.is_admin) {
+          setAllowed(true);
+        } else {
+          navigate("/");
+        }
+      } catch {
         navigate("/login");
-        return;
+      } finally {
+        setChecking(false);
       }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", data.user.id)
-        .single();
-      if (profile?.is_admin) {
-        setAllowed(true);
-      } else {
-        navigate("/");
-      }
-      setChecking(false);
-    });
-  }, []);
+    }
+
+    checkAdmin();
+  }, [isLoaded, navigate, supabase, user]);
 
   if (checking) {
     return (

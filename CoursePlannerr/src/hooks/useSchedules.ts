@@ -1,18 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
+import { useUser } from '@clerk/clerk-react';
 import type { Course } from '../types';
+import { useSupabase } from './useSupabase';
 
 export function useSchedules() {
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const userId = user?.id ?? null;
   const [activeSlot, setActiveSlot] = useState(1);
   const [schedules, setSchedules] = useState<Record<number, Course[]>>({ 1: [], 2: [], 3: [] });
-  const [userId, setUserId] = useState<string | null>(null);
-
-  // Get current user
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUserId(data.session?.user.id ?? null);
-    });
-  }, []);
 
   // Load all 3 schedules from Supabase
   useEffect(() => {
@@ -27,7 +23,7 @@ export function useSchedules() {
         data.forEach(row => { loaded[row.slot] = row.courses; });
         setSchedules(loaded);
       });
-  }, [userId]);
+  }, [supabase, userId]);
 
   // Save a slot to Supabase
   const saveSlot = useCallback(async (slot: number, courses: Course[]) => {
@@ -36,7 +32,7 @@ export function useSchedules() {
       { user_id: userId, slot, courses, updated_at: new Date().toISOString() },
       { onConflict: 'user_id,slot' }
     );
-  }, [userId]);
+  }, [supabase, userId]);
 
   const scheduled = schedules[activeSlot] ?? [];
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "../supabaseClient.ts";
+import { useUser } from "@clerk/clerk-react";
+import { useSupabase } from "../hooks/useSupabase.ts";
 
 const API = import.meta.env.VITE_API_URL || "";
 console.log("API URL:", API);
@@ -593,25 +594,16 @@ function SentimentPanel({ sentiment }: { sentiment: ReturnType<typeof getSentime
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function Reviews() {
+  const supabase = useSupabase();
+  const { isLoaded, user } = useUser();
   const suppressProfSearch = useRef(false);
   const suppressCourseSearch = useRef(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>("courses");
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-      setAuthLoading(false);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id ?? null);
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
+  const userId = user?.id ?? null;
+  const authLoading = !isLoaded;
 
   const [courseSearch, setCourseSearch] = useState("");
   const [courseResults, setCourseResults] = useState<{ department: string; course_number: string; title: string }[]>([]);

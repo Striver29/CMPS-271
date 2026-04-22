@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../supabaseClient.ts";
+import { useUser } from "@clerk/clerk-react";
+import { useSupabase } from "../hooks/useSupabase.ts";
 
 type Status = "pending" | "approved" | "rejected";
 
@@ -31,10 +32,12 @@ const STATUS_BG: Record<Status, string> = {
 
 export default function AdminPortal() {
   const navigate = useNavigate();
+  const supabase = useSupabase();
+  const { user } = useUser();
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Status | "all">("pending");
-  const [adminEmail, setAdminEmail] = useState("");
+  const adminEmail = user?.primaryEmailAddress?.emailAddress ?? "";
 
   // Review modal state
   const [reviewing, setReviewing] = useState<Syllabus | null>(null);
@@ -42,14 +45,7 @@ export default function AdminPortal() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setAdminEmail(data.user?.email ?? "");
-    });
-    loadSyllabi();
-  }, []);
-
-  const loadSyllabi = async () => {
+  const loadSyllabi = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("syllabi")
@@ -57,7 +53,11 @@ export default function AdminPortal() {
       .order("created_at", { ascending: false });
     setSyllabi(data ?? []);
     setLoading(false);
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    Promise.resolve().then(loadSyllabi);
+  }, [loadSyllabi]);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });

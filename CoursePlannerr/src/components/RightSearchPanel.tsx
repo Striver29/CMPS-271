@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
 import type { Course } from "../types";
-import { supabase } from "../supabaseClient.ts";
+import { useSupabase } from "../hooks/useSupabase.ts";
 
 const API = import.meta.env.VITE_API_URL || "";
 const PAGE_SIZE = 20;
@@ -69,6 +70,8 @@ export function RightSearchPanel({
   onSlotChange,
 }: Props) {
   const navigate = useNavigate();
+  const supabase = useSupabase();
+  const { user } = useUser();
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -136,7 +139,6 @@ export function RightSearchPanel({
     setUploadError(null);
     setUploadSuccess(false);
 
-    const { data: { user } } = await supabase.auth.getUser();
     const fileName = `${viewModal.course.code.replace(" ", "_")}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from("syllabi").upload(fileName, file, { contentType: "application/pdf" });
     if (storageError) { setUploadError("Upload failed. Make sure you are logged in."); setUploading(false); return; }
@@ -146,7 +148,7 @@ export function RightSearchPanel({
       course_code: viewModal.course.code,
       file_url: urlData.publicUrl,
       file_name: file.name,
-      uploaded_by: user?.email ?? "anonymous",
+      uploaded_by: user?.primaryEmailAddress?.emailAddress ?? user?.id ?? "anonymous",
     });
 
     if (dbError) setUploadError("Could not save syllabus info.");

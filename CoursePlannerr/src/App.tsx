@@ -1,5 +1,6 @@
 import { Suspense, lazy, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
 import "./App.css";
 import type { Course } from "./types";
 import { TopNav } from "./components/TopNav";
@@ -7,10 +8,10 @@ import { LeftInfoPanel } from "./components/LeftInfoPanel";
 import { ScheduleGrid } from "./components/ScheduleGrid";
 import { RightSearchPanel } from "./components/RightSearchPanel";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { supabase } from "./supabaseClient.ts";
 import { AIScheduler } from "./components/AiScheduler.tsx";
 import AdminRoute from "./components/AdminRoute";
 import { mapApiCoursesToCourses } from "./utils/courseApi.ts";
+import { useSupabase } from "./hooks/useSupabase.ts";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const COURSE_CACHE_PREFIX = "uniflow:courses:v2:";
@@ -123,6 +124,9 @@ const COURSE_COLORS = [
 
 export default function App() {
   const appName = "UniFlow";
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const userId = user?.id ?? null;
   const initialTerms = useMemo(
     () => readCachedJson<TermRecord[]>(TERMS_CACHE_KEY) ?? [],
     [],
@@ -199,18 +203,17 @@ export default function App() {
     2: [],
     3: [],
   });
-  const [userId, setUserId] = useState<string | null>(null);
 
   const [mobileTab, setMobileTab] = useState<MobileTab>("schedule");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUserId(data.session?.user.id ?? null);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!userId || !semesterId) return;
+    if (!userId || !semesterId) {
+      Promise.resolve().then(() => {
+        setSchedules({ 1: [], 2: [], 3: [] });
+        setCustomColors(new Map());
+      });
+      return;
+    }
     supabase
       .from("schedules")
       .select("slot, courses, colors")
@@ -230,10 +233,13 @@ export default function App() {
         setSchedules(loaded);
         setCustomColors(loadedColors);
       });
-  }, [userId, semesterId]);
+  }, [supabase, userId, semesterId]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      Promise.resolve().then(() => setFavorites([]));
+      return;
+    }
     supabase
       .from("favorites")
       .select("course")
@@ -247,7 +253,7 @@ export default function App() {
             .map(sanitizeCourse),
         );
       });
-  }, [userId]);
+  }, [supabase, userId]);
 
   const saveSlot = useCallback(
     async (slot: number, courses: Course[], colors?: Map<string, string>) => {
@@ -267,7 +273,7 @@ export default function App() {
         { onConflict: "user_id,slot,term_id" },
       );
     },
-    [userId, semesterId, customColors],
+    [supabase, userId, semesterId, customColors],
   );
 
   const toggleFavorite = useCallback(
@@ -288,7 +294,7 @@ export default function App() {
           .insert({ user_id: userId, course_id: course.id, course });
       }
     },
-    [userId, favorites],
+    [supabase, userId, favorites],
   );
 
   const scheduled = useMemo(
