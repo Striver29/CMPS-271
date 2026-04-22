@@ -1,6 +1,7 @@
 import { createContext, createElement, type ReactNode, useContext, useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { useSupabase } from "./useSupabase";
+import { isAllowedUniFlowEmail } from "../utils/authDomains";
 
 type AppUserState = {
   appUserId: string | null;
@@ -65,6 +66,12 @@ export function AppUserProvider({ children }: { children: ReactNode }) {
       if (!isLoaded) return;
 
       if (!clerkUserId || !email) {
+        setAppUserId(null);
+        setLoading(false);
+        return;
+      }
+
+      if (!isAllowedUniFlowEmail(email)) {
         setAppUserId(null);
         setLoading(false);
         return;

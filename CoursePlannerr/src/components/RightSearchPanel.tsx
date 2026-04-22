@@ -56,6 +56,15 @@ interface Syllabus {
   created_at: string;
 }
 
+function isSchemaMismatchError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    /column|schema cache|could not find/i.test(error.message ?? "")
+  );
+}
+
 export function RightSearchPanel({
   allCourses,
   scheduled,
@@ -123,11 +132,17 @@ export function RightSearchPanel({
       .eq("course_code", viewModal.course.code)
       .eq("status", "approved")
       .order("created_at", { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Could not load approved syllabi:", error);
+          setSyllabi([]);
+          setSyllabusLoading(false);
+          return;
+        }
         setSyllabi(data || []);
         setSyllabusLoading(false);
       });
-  }, [modalTab, viewModal]);
+  }, [modalTab, viewModal, supabase]);
 
   const handleSyllabusUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -144,15 +159,36 @@ export function RightSearchPanel({
     if (storageError) { setUploadError("Upload failed. Make sure you are logged in."); setUploading(false); return; }
 
     const { data: urlData } = supabase.storage.from("syllabi").getPublicUrl(fileName);
-    const { error: dbError } = await supabase.from("syllabi").insert({
+    const pendingSyllabus = {
       course_code: viewModal.course.code,
       file_url: urlData.publicUrl,
       file_name: file.name,
       uploaded_by: user?.primaryEmailAddress?.emailAddress ?? user?.id ?? "anonymous",
-    });
+      status: "pending",
+      admin_comment: null,
+      reviewed_by: null,
+      reviewed_at: null,
+    };
 
-    if (dbError) setUploadError("Could not save syllabus info.");
-    else setUploadSuccess(true);
+    const { error: dbError } = await supabase.from("syllabi").insert(pendingSyllabus);
+    let finalDbError = dbError;
+
+    if (isSchemaMismatchError(dbError)) {
+      const { error: fallbackError } = await supabase.from("syllabi").insert({
+        course_code: pendingSyllabus.course_code,
+        file_url: pendingSyllabus.file_url,
+        file_name: pendingSyllabus.file_name,
+        uploaded_by: pendingSyllabus.uploaded_by,
+      });
+      finalDbError = fallbackError;
+    }
+
+    if (finalDbError) {
+      console.error("Could not save syllabus info:", finalDbError);
+      setUploadError(`Could not save syllabus info: ${finalDbError.message}`);
+    } else {
+      setUploadSuccess(true);
+    }
     setUploading(false);
   };
 

@@ -480,8 +480,8 @@ let professorSearchCache = {
   expiresAt: 0
 };
 
-async function fetchCachedProfessors() {
-  if (professorSearchCache.data && professorSearchCache.expiresAt > Date.now()) {
+async function fetchCachedProfessors(forceRefresh = false) {
+  if (!forceRefresh && professorSearchCache.data && professorSearchCache.expiresAt > Date.now()) {
     return { data: professorSearchCache.data, error: null };
   }
 
@@ -1200,8 +1200,9 @@ function sendModerationRejection(res, moderation) {
 }
 
 app.get("/api/terms", async (req, res) => {
+  const { fresh } = req.query;
   const cached = getCachedResponse("terms");
-  if (cached) return sendJson(req, res, cached);
+  if (!(fresh === "1" || fresh === "true") && cached) return sendJson(req, res, cached);
 
   const { data, error } = await supabase
     .from("terms")
@@ -1221,9 +1222,22 @@ app.get("/api/terms", async (req, res) => {
 
 app.get("/api/courses", async (req, res) => {
   const { term, search } = req.query;
+  let resolvedTerm = term;
+
+  if (!resolvedTerm) {
+    const { data: currentTerm, error: termError } = await supabase
+      .from("terms")
+      .select("code")
+      .eq("is_current", true)
+      .maybeSingle();
+
+    if (termError) return res.status(500).json(termError);
+    resolvedTerm = currentTerm?.code;
+  }
+
   const cacheKey = search
     ? null
-    : `courses:${term || "none"}`;
+    : `courses:${resolvedTerm || "none"}`;
 
   if (cacheKey) {
     const cached = getCachedResponse(cacheKey);
@@ -1232,8 +1246,11 @@ app.get("/api/courses", async (req, res) => {
 
   let query = supabase
     .from("courses")
-    .select("*, professors(full_name)")
-    .eq("semester", term);
+    .select("*, professors(full_name)");
+
+  if (resolvedTerm) {
+    query = query.eq("semester", resolvedTerm);
+  }
 
   if (search) {
     query = query.or(
@@ -1340,7 +1357,7 @@ app.post("/api/ratings/professor", async (req, res) => {
 });
 
 app.get("/api/professors", async (req, res) => {
-  const { search } = req.query;
+  const { search, fresh } = req.query;
 
   if (!search || String(search).trim().length < 2) {
     const { data, error } = await supabase
@@ -1355,7 +1372,7 @@ app.get("/api/professors", async (req, res) => {
 
   const normalizedSearch = normalizeText(search);
   const tokens = extractProfessorQueryTokens(search);
-  const { data, error } = await fetchCachedProfessors();
+  const { data, error } = await fetchCachedProfessors(fresh === "1" || fresh === "true");
   if (error) return res.status(500).json(error);
 
   const ranked = (data || [])

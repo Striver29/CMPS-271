@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSupabase } from "../hooks/useSupabase.ts";
 import { useAppUser } from "../hooks/useAppUser.ts";
@@ -9,6 +9,11 @@ console.log("API URL:", API);
 type Tab = "courses" | "professors";
 
 type ProfessorResult = { id: string; full_name: string };
+
+type TermRecord = {
+  code: string;
+  is_current?: boolean;
+};
 
 interface CourseRating {
   id: string;
@@ -30,6 +35,16 @@ interface ProfessorRating {
   rating: number;
   review: string;
   created_at: string;
+}
+
+interface SyllabusSubmission {
+  id: string;
+  course_code: string;
+  file_url: string;
+  file_name: string;
+  uploaded_by: string;
+  created_at: string;
+  status?: "pending" | "approved" | "rejected" | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -595,7 +610,7 @@ function SentimentPanel({ sentiment }: { sentiment: ReturnType<typeof getSentime
 
 export default function Reviews() {
   const supabase = useSupabase();
-  const { appUserId: userId, loading: authLoading } = useAppUser();
+  const { appUserId: userId, email, loading: authLoading } = useAppUser();
   const suppressProfSearch = useRef(false);
   const suppressCourseSearch = useRef(false);
   const navigate = useNavigate();
@@ -605,10 +620,16 @@ export default function Reviews() {
   const [courseSearch, setCourseSearch] = useState("");
   const [courseResults, setCourseResults] = useState<{ department: string; course_number: string; title: string }[]>([]);
   const [courseSearchLoading, setCourseSearchLoading] = useState(false);
+  const [reviewTermId, setReviewTermId] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<{ department: string; course_number: string; title: string } | null>(null);
   const [courseRatings, setCourseRatings] = useState<CourseRating[]>([]);
   const [courseAvg, setCourseAvg] = useState<{ rating: string; difficulty: string; count: number } | null>(null);
   const [courseSummary, setCourseSummary] = useState<string | null>(null);
+  const [courseSyllabi, setCourseSyllabi] = useState<SyllabusSubmission[]>([]);
+  const [syllabusLoading, setSyllabusLoading] = useState(false);
+  const [syllabusError, setSyllabusError] = useState<string | null>(null);
+  const [syllabusUploading, setSyllabusUploading] = useState(false);
+  const [syllabusUploadMessage, setSyllabusUploadMessage] = useState<string | null>(null);
 
   const [profSearch, setProfSearch] = useState("");
   const [profApiQuery, setProfApiQuery] = useState("");
@@ -649,7 +670,26 @@ export default function Reviews() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const loadCourseRatings = (dept: string, num: string) => {
+  const buildCourseSearchUrl = useCallback((search: string) => {
+    const params = new URLSearchParams();
+    if (reviewTermId) params.set("term", reviewTermId);
+    params.set("search", search);
+    return `${API}/api/courses?${params.toString()}`;
+  }, [reviewTermId]);
+
+  useEffect(() => {
+    fetch(`${API}/api/terms?fresh=1`)
+      .then((r) => r.json())
+      .then((terms: TermRecord[]) => {
+        const currentTerm = terms.find((term) => term.is_current) ?? terms[0];
+        setReviewTermId(currentTerm?.code ?? "");
+      })
+      .catch(() => {
+        setReviewTermId("");
+      });
+  }, []);
+
+  const loadCourseRatings = useCallback((dept: string, num: string) => {
     fetch(`${API}/api/ratings/course/${dept}/${num}`)
       .then((r) => r.json())
       .then((data) => {
@@ -658,9 +698,30 @@ export default function Reviews() {
         setCourseAvg(data.averages || null);
         setCourseSummary(data.summary || buildClientCourseSummary(`${dept} ${num}`, ratings));
       });
-  };
+  }, []);
 
-  const handleSelectCourse = (c: { department: string; course_number: string; title: string }) => {
+  const loadCourseSyllabi = useCallback(async (dept: string, num: string) => {
+    const courseCode = `${dept} ${num}`;
+    setSyllabusLoading(true);
+    setSyllabusError(null);
+    const { data, error } = await supabase
+      .from("syllabi")
+      .select("id, course_code, file_url, file_name, uploaded_by, created_at, status")
+      .eq("course_code", courseCode)
+      .eq("status", "approved")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Could not load syllabi:", error);
+      setCourseSyllabi([]);
+      setSyllabusError(error.message);
+    } else {
+      setCourseSyllabi((data ?? []) as SyllabusSubmission[]);
+    }
+    setSyllabusLoading(false);
+  }, [supabase]);
+
+  const handleSelectCourse = useCallback((c: { department: string; course_number: string; title: string }) => {
     suppressCourseSearch.current = true;
     setSelectedCourse(c);
     setCourseSearch(`${c.department} ${c.course_number}`);
@@ -670,8 +731,12 @@ export default function Reviews() {
     setSubmitted(false);
     setSubmitError(null);
     setCourseSummary(null);
+    setCourseSyllabi([]);
+    setSyllabusError(null);
+    setSyllabusUploadMessage(null);
     loadCourseRatings(c.department, c.course_number);
-  };
+    void loadCourseSyllabi(c.department, c.course_number);
+  }, [loadCourseRatings, loadCourseSyllabi]);
 
   useEffect(() => {
     const course = searchParams.get("course");
@@ -682,7 +747,7 @@ export default function Reviews() {
     setCourseSearch(course);
     setTab("courses");
     setShowForm(true);
-    fetch(`${API}/api/courses?term=202620&search=${encodeURIComponent(dept)}`)
+    fetch(buildCourseSearchUrl(dept))
       .then((r) => r.json())
       .then((data) => {
         for (const c of data) {
@@ -692,16 +757,7 @@ export default function Reviews() {
           }
         }
       });
-  }, []);
-
-  useEffect(() => {
-    const professorId = searchParams.get("professor");
-    if (!professorId) return;
-    const professorName = searchParams.get("professorName") || "Selected professor";
-    setTab("professors");
-    setShowForm(false);
-    handleSelectProf({ id: professorId, full_name: professorName });
-  }, []);
+  }, [buildCourseSearchUrl, handleSelectCourse, searchParams]);
 
   useEffect(() => {
     if (suppressCourseSearch.current) {
@@ -723,7 +779,7 @@ export default function Reviews() {
       const apiSearch = /^[A-Z]{2,5}$/.test(dept) ? dept : searchText;
       const tokens = searchText.toLowerCase().split(/\s+/).filter(Boolean);
 
-      fetch(`${API}/api/courses?term=202620&search=${encodeURIComponent(apiSearch)}`)
+      fetch(buildCourseSearchUrl(apiSearch))
         .then((r) => r.json())
         .then((data) => {
           const seen = new Set<string>();
@@ -743,7 +799,7 @@ export default function Reviews() {
     }, 180);
 
     return () => { window.clearTimeout(timeout); setCourseSearchLoading(false); };
-  }, [courseSearch]);
+  }, [buildCourseSearchUrl, courseSearch]);
 
   useEffect(() => {
     if (suppressProfSearch.current) {
@@ -762,7 +818,7 @@ export default function Reviews() {
       const queries = [searchText, ...getSearchTokens(searchText)].filter((query, index, all) => query.length >= 2 && all.indexOf(query) === index);
 
       Promise.all(queries.map((query) =>
-        fetch(`${API}/api/professors?search=${encodeURIComponent(query)}`).then((r) => r.json()).catch(() => []),
+        fetch(`${API}/api/professors?search=${encodeURIComponent(query)}&fresh=1`).then((r) => r.json()).catch(() => []),
       ))
         .then((responses) => {
           const merged = responses.flat().filter(Boolean) as ProfessorResult[];
@@ -775,7 +831,7 @@ export default function Reviews() {
     return () => { window.clearTimeout(timeout); setProfSearchLoading(false); };
   }, [profApiQuery]);
 
-  const loadProfRatings = (profId: string, professorName = "this professor") => {
+  const loadProfRatings = useCallback((profId: string, professorName = "this professor") => {
     fetch(`${API}/api/ratings/professor/${profId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -784,9 +840,9 @@ export default function Reviews() {
         setProfAvg(data.averages || null);
         setProfSummary(data.summary || buildClientProfessorSummary(professorName, ratings));
       });
-  };
+  }, []);
 
-  const handleSelectProf = (p: { id: string; full_name: string }) => {
+  const handleSelectProf = useCallback((p: { id: string; full_name: string }) => {
     suppressProfSearch.current = true;
     setSelectedProf(p);
     setProfSearch(formatProfName(p.full_name));
@@ -806,7 +862,16 @@ export default function Reviews() {
       .then((r) => r.json())
       .then((data) => setProfCourses(Array.isArray(data) ? data : []))
       .catch(() => setProfCourses([]));
-  };
+  }, [loadProfRatings]);
+
+  useEffect(() => {
+    const professorId = searchParams.get("professor");
+    if (!professorId) return;
+    const professorName = searchParams.get("professorName") || "Selected professor";
+    setTab("professors");
+    setShowForm(false);
+    handleSelectProf({ id: professorId, full_name: professorName });
+  }, [handleSelectProf, searchParams]);
 
   // ── FIX 3: Delete handlers ──
 
@@ -974,6 +1039,141 @@ export default function Reviews() {
       <span style={{ color: "#34d399", fontSize: 14 }}>✅ Thanks for your review!</span>
     ) : null;
 
+  const handleSyllabusUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !selectedCourse) return;
+
+    if (!userId) {
+      setSyllabusUploadMessage("Sign in to upload a syllabus.");
+      return;
+    }
+
+    if (file.type !== "application/pdf") {
+      setSyllabusUploadMessage("Only PDF files are allowed.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setSyllabusUploadMessage("File must be under 10MB.");
+      return;
+    }
+
+    const courseCode = `${selectedCourse.department} ${selectedCourse.course_number}`;
+    const safeCourseCode = courseCode.replace(/[^A-Z0-9]+/gi, "_");
+    const storagePath = `${safeCourseCode}/${Date.now()}_${file.name.replace(/[^a-z0-9_.-]/gi, "_")}`;
+
+    setSyllabusUploading(true);
+    setSyllabusUploadMessage(null);
+
+    const { error: storageError } = await supabase.storage
+      .from("syllabi")
+      .upload(storagePath, file, { contentType: "application/pdf" });
+
+    if (storageError) {
+      console.error("Could not upload syllabus file:", storageError);
+      setSyllabusUploadMessage(`Upload failed: ${storageError.message}`);
+      setSyllabusUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("syllabi").getPublicUrl(storagePath);
+    const { error: dbError } = await supabase.from("syllabi").insert({
+      course_code: courseCode,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+      uploaded_by: email ?? "anonymous",
+      status: "pending",
+      admin_comment: null,
+      reviewed_by: null,
+      reviewed_at: null,
+    });
+
+    if (dbError) {
+      console.error("Could not save syllabus submission:", dbError);
+      setSyllabusUploadMessage(`Could not submit syllabus: ${dbError.message}`);
+    } else {
+      setSyllabusUploadMessage("Uploaded. It will appear here after admin approval.");
+    }
+    setSyllabusUploading(false);
+  };
+
+  const renderSyllabusSection = () => {
+    if (!selectedCourse) return null;
+
+    return (
+      <div style={{ ...card, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: "var(--text)" }}>Syllabi</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
+              Approved files for {selectedCourse.department} {selectedCourse.course_number}
+            </div>
+          </div>
+          <label
+            style={{
+              background: userId ? "var(--accent)" : "var(--panel2)",
+              color: userId ? "#fff" : "var(--muted)",
+              border: userId ? "none" : "1px solid var(--border)",
+              padding: "9px 18px",
+              borderRadius: 8,
+              cursor: userId && !syllabusUploading ? "pointer" : "not-allowed",
+              fontSize: 14,
+              fontWeight: 800,
+              opacity: syllabusUploading ? 0.65 : 1,
+            }}
+          >
+            {syllabusUploading ? "Uploading..." : "Upload syllabus"}
+            <input
+              type="file"
+              accept="application/pdf"
+              disabled={!userId || syllabusUploading}
+              onChange={handleSyllabusUpload}
+              style={{ display: "none" }}
+            />
+          </label>
+        </div>
+
+        {syllabusUploadMessage && (
+          <div style={{ color: syllabusUploadMessage.startsWith("Uploaded") ? "#34d399" : "#ef4444", fontSize: 13, marginBottom: 14 }}>
+            {syllabusUploadMessage}
+          </div>
+        )}
+
+        {syllabusLoading ? (
+          <div style={{ color: "var(--muted)", fontSize: 14 }}>Loading syllabi...</div>
+        ) : syllabusError ? (
+          <div style={{ color: "#ef4444", fontSize: 13 }}>{syllabusError}</div>
+        ) : courseSyllabi.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 14 }}>No approved syllabi yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {courseSyllabi.map((syllabus) => (
+              <div key={syllabus.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {syllabus.file_name}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 3 }}>
+                    Uploaded by {syllabus.uploaded_by} · {new Date(syllabus.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <a
+                  href={syllabus.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#fff", background: "var(--accent)", textDecoration: "none", borderRadius: 6, padding: "7px 12px", fontSize: 13, fontWeight: 800 }}
+                >
+                  View PDF
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "system-ui, sans-serif" }}>
       {/* ── FIX 2: Mobile-friendly header ── */}
@@ -1050,6 +1250,7 @@ export default function Reviews() {
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>{renderWriteButton()}</div>
             </div>
             {showForm && renderForm(handleSubmitCourse, true)}
+            {renderSyllabusSection()}
             {courseAvg && courseAvg.count > 0 ? (
               <CourseAnalytics ratings={courseRatings} avg={courseAvg} />
             ) : (

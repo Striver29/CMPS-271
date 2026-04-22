@@ -18,6 +18,13 @@ interface Syllabus {
   reviewed_at: string | null;
 }
 
+type RawSyllabus = Omit<Syllabus, "status" | "admin_comment" | "reviewed_by" | "reviewed_at"> & {
+  status?: Status | null;
+  admin_comment?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+};
+
 const STATUS_COLOR: Record<Status, string> = {
   pending: "#f59e0b",
   approved: "#22c55e",
@@ -30,12 +37,23 @@ const STATUS_BG: Record<Status, string> = {
   rejected: "rgba(239,68,68,0.12)",
 };
 
+function normalizeSyllabus(row: RawSyllabus): Syllabus {
+  return {
+    ...row,
+    status: row.status ?? "pending",
+    admin_comment: row.admin_comment ?? null,
+    reviewed_by: row.reviewed_by ?? null,
+    reviewed_at: row.reviewed_at ?? null,
+  };
+}
+
 export default function AdminPortal() {
   const navigate = useNavigate();
   const supabase = useSupabase();
   const { user } = useUser();
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Status | "all">("pending");
   const adminEmail = user?.primaryEmailAddress?.emailAddress ?? "";
 
@@ -47,11 +65,19 @@ export default function AdminPortal() {
 
   const loadSyllabi = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    setLoadError(null);
+    const { data, error } = await supabase
       .from("syllabi")
       .select("*")
       .order("created_at", { ascending: false });
-    setSyllabi(data ?? []);
+    if (error) {
+      console.error("Could not load syllabus submissions:", error);
+      setLoadError(error.message);
+      setSyllabi([]);
+      setLoading(false);
+      return;
+    }
+    setSyllabi(((data ?? []) as RawSyllabus[]).map(normalizeSyllabus));
     setLoading(false);
   }, [supabase]);
 
@@ -82,6 +108,7 @@ export default function AdminPortal() {
       .eq("id", reviewing.id);
 
     if (error) {
+      console.error("Could not update syllabus submission:", error);
       showToast("Something went wrong. Try again.", false);
     } else {
       showToast(
@@ -313,6 +340,37 @@ export default function AdminPortal() {
               }}
             >
               Loading submissions…
+            </div>
+          ) : loadError ? (
+            <div
+              style={{
+                padding: 48,
+                textAlign: "center",
+                color: "#ef4444",
+                fontSize: 14,
+                lineHeight: 1.6,
+              }}
+            >
+              Could not load syllabus submissions.
+              <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
+                {loadError}
+              </div>
+              <button
+                onClick={loadSyllabi}
+                style={{
+                  marginTop: 16,
+                  background: "var(--panel2)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text)",
+                  padding: "7px 16px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                Try again
+              </button>
             </div>
           ) : filtered.length === 0 ? (
             <div
