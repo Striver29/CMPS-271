@@ -1,10 +1,11 @@
 // src/pages/Login.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
 const AUB_DOMAINS = ["@aub.edu.lb", "@mail.aub.edu"];
 const isAubEmail = (address: string) => AUB_DOMAINS.some((d) => address.endsWith(d));
+const authRedirectUrl = (path: string) => `${window.location.origin}${path}`;
 
 type AuthView = "login" | "signup" | "reset";
 
@@ -16,6 +17,19 @@ type FieldProps = {
   onChange: (value: string) => void;
 };
 
+type AuthErrorLike = {
+  message?: string;
+  status?: number;
+};
+
+function formatAuthError(err: AuthErrorLike | null | undefined, fallback: string) {
+  if (!err) return fallback;
+  if (err.status && err.status >= 500) {
+    return `${fallback} Supabase returned ${err.status}. Check the Supabase Auth logs, SMTP/email settings, and allowed redirect URLs.`;
+  }
+  return err.message || fallback;
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const [view, setView] = useState<AuthView>("login");
@@ -24,14 +38,22 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const [success, setSuccess] = useState("");
+  const [success, setSuccess] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("confirmed") === "true"
+      ? "Email confirmed! You can now sign in."
+      : "";
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("confirmed") === "true") {
-      setSuccess("Email confirmed! You can now sign in.");
-    }
+    if (params.get("confirmed") !== "true") return;
+
+    params.delete("confirmed");
+    const query = params.toString();
+    const cleanUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", cleanUrl);
   }, []);
 
   const resetBanners = () => { setError(""); setInfo(""); setSuccess(""); };
@@ -75,9 +97,15 @@ export default function Login() {
       setError("An account with this email already exists. Please sign in instead.");
       return;
     }
-    const { error: err } = await supabase.auth.signUp({ email: norm, password });
+    const { error: err } = await supabase.auth.signUp({
+      email: norm,
+      password,
+      options: {
+        emailRedirectTo: authRedirectUrl("/login?confirmed=true"),
+      },
+    });
     setLoading(false);
-    if (err) { setError(err.message || "Sign-up failed."); return; }
+    if (err) { setError(formatAuthError(err, "Sign-up failed.")); return; }
     setSuccess(`Verification email sent to ${norm}. Click the link in your inbox, then come back to sign in.`);
   };
 
@@ -88,10 +116,10 @@ export default function Login() {
     if (!isAubEmail(norm)) { setError("Only AUB email addresses are allowed."); return; }
     setLoading(true);
     const { error: err } = await supabase.auth.resetPasswordForEmail(norm, {
-      redirectTo: `${window.location.origin}/update-password`,
+      redirectTo: authRedirectUrl("/update-password"),
     });
     setLoading(false);
-    if (err) { setError(err.message || "Could not send reset email."); return; }
+    if (err) { setError(formatAuthError(err, "Could not send reset email.")); return; }
     setSuccess(`Reset link sent to ${norm}. Check your inbox.`);
   };
 

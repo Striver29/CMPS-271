@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient.ts";
 import { Navigate } from "react-router-dom";
 
-export default function ProtectedRoute({ children }: any) {
+type ProtectedRouteProps = {
+  children: ReactNode;
+};
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
 
@@ -27,7 +31,7 @@ export default function ProtectedRoute({ children }: any) {
 
   if (loading) return <div>Loading...</div>;
 
-  if (!authenticated) return <Navigate to="/login?confirmed=true" />;
+  if (!authenticated) return <Navigate to="/login" replace />;
 
   return children;
 }

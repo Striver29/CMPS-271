@@ -250,10 +250,7 @@ const SUMMARY_STOP_WORDS = new Set([
   "x", "y", "you"
 ]);
 
-const REVIEW_INTENT_KEYWORDS = [
-  "professor",
-  "prof",
-  "instructor",
+const PROFESSOR_SUMMARY_INTENT_KEYWORDS = [
   "review",
   "reviews",
   "feedback",
@@ -1420,70 +1417,82 @@ app.get("/api/courses/search", async (req, res) => {
 });
 
 app.post("/api/ai-schedule", async (req, res) => {
-  const {
-    message,
-    requestText,
-    sections = [],
-    existingSections = [],
-    suggestionLimit,
-    matchedAttributes = [],
-    matchedDepartments = [],
-    matchedInstructors = [],
-    difficulties = {}
-  } = req.body ?? {};
-
-  if (!message || typeof message !== "string") {
-    return res.status(400).json({ error: "A chat message is required." });
-  }
-
-  const normalizedMessage = normalizeText(message);
-  const reviewIntent = REVIEW_INTENT_KEYWORDS.some(keyword => normalizedMessage.includes(keyword));
-  const professor = await findProfessorFromMessage(message);
-
-  if (professor && (reviewIntent || !Array.isArray(sections) || sections.length === 0)) {
-    const { data, error } = await supabase
-      .from("professor_ratings")
-      .select("*")
-      .eq("professor_id", professor.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      return res.status(500).json({ error: "Couldn't load professor reviews right now." });
-    }
-
-    return res.json({
-      mode: "professor-summary",
-      schedule: [],
-      professor,
-      summary: buildProfessorSummary(professor, data || [])
-    });
-  }
-
-  if (reviewIntent && !professor) {
-    return res.json({
-      mode: "professor-summary",
-      schedule: [],
-      summary: 'I could not confidently match that professor name. Try the full name exactly as it appears in Reviews, for example: "Summarize the reviews for Professor Jane Doe."'
-    });
-  }
-
-  const plan = buildSchedulePlan(
-    typeof requestText === "string" && requestText.trim() ? requestText : message,
-    sections,
-    difficulties,
-    {
-      existingSections,
+  try {
+    const {
+      message,
+      requestText,
+      sections = [],
+      existingSections = [],
       suggestionLimit,
-      matchedAttributes,
-      matchedDepartments,
-      matchedInstructors
+      matchedAttributes = [],
+      matchedDepartments = [],
+      matchedInstructors = [],
+      difficulties = {}
+    } = req.body ?? {};
+
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ error: "A chat message is required." });
     }
-  );
-  return res.json({
-    mode: "schedule",
-    schedule: plan.schedule,
-    summary: plan.summary
-  });
+
+    const normalizedMessage = normalizeText(message);
+    const professorSummaryIntent = PROFESSOR_SUMMARY_INTENT_KEYWORDS.some(keyword =>
+      normalizedMessage.includes(keyword)
+    );
+    const professor = professorSummaryIntent
+      ? await findProfessorFromMessage(message)
+      : null;
+
+    if (professor) {
+      const { data, error } = await supabase
+        .from("professor_ratings")
+        .select("*")
+        .eq("professor_id", professor.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("AI professor summary error:", error);
+        return res.status(500).json({ error: "Couldn't load professor reviews right now." });
+      }
+
+      return res.json({
+        mode: "professor-summary",
+        schedule: [],
+        professor,
+        summary: buildProfessorSummary(professor, data || [])
+      });
+    }
+
+    if (professorSummaryIntent && !professor) {
+      return res.json({
+        mode: "professor-summary",
+        schedule: [],
+        summary: 'I could not confidently match that professor name. Try the full name exactly as it appears in Reviews, for example: "Summarize the reviews for Professor Jane Doe."'
+      });
+    }
+
+    const plan = buildSchedulePlan(
+      typeof requestText === "string" && requestText.trim() ? requestText : message,
+      Array.isArray(sections) ? sections : [],
+      difficulties && typeof difficulties === "object" ? difficulties : {},
+      {
+        existingSections: Array.isArray(existingSections) ? existingSections : [],
+        suggestionLimit,
+        matchedAttributes: Array.isArray(matchedAttributes) ? matchedAttributes : [],
+        matchedDepartments: Array.isArray(matchedDepartments) ? matchedDepartments : [],
+        matchedInstructors: Array.isArray(matchedInstructors) ? matchedInstructors : []
+      }
+    );
+    return res.json({
+      mode: "schedule",
+      schedule: plan.schedule,
+      summary: plan.summary
+    });
+  } catch (error) {
+    console.error("AI schedule error:", error);
+    return res.status(500).json({
+      error: "AI scheduler failed on the server. Check the Render logs for the full stack trace."
+    });
+  }
 });
 
 console.log("About to listen...");

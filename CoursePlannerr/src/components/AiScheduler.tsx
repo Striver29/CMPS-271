@@ -504,7 +504,26 @@ export function AIScheduler({ allCourses, scheduledCourses, onApplySchedule, act
         }),
       });
 
-      const data = await res.json();
+      const rawResponse = await res.text();
+      let data: {
+        error?: string;
+        mode?: string;
+        professor?: { id?: string; full_name?: string };
+        schedule?: string[];
+        summary?: string;
+      } = {};
+      try {
+        data = rawResponse ? JSON.parse(rawResponse) : {};
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        const message = data.error || `AI scheduler request failed with status ${res.status}.`;
+        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${message}` }]);
+        setLoading(false);
+        return;
+      }
 
       if (data.error) {
         setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error}` }]);
