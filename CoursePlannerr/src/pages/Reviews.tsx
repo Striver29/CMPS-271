@@ -83,6 +83,11 @@ function formatProfName(fullName: string) {
   return first && last ? `${first} ${last}` : fullName;
 }
 
+function isDemoTopRatedProfessor(fullName: string | null | undefined) {
+  const normalized = normalizeSearchText(formatProfName(String(fullName ?? "")));
+  return normalized.includes("zalghout") && (normalized.includes("mohamed") || normalized.includes("mohamad"));
+}
+
 function normalizeSearchText(value: string) {
   return String(value)
     .toLowerCase()
@@ -1176,6 +1181,27 @@ export default function Reviews() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "system-ui, sans-serif" }}>
+      <style>{`
+        @keyframes demoTopRatedShimmer {
+          0% {
+            background-position: 0% 50%;
+            box-shadow: 0 10px 24px rgba(251, 191, 36, 0.18);
+          }
+          50% {
+            background-position: 100% 50%;
+            box-shadow: 0 12px 30px rgba(251, 191, 36, 0.28);
+          }
+          100% {
+            background-position: 0% 50%;
+            box-shadow: 0 10px 24px rgba(251, 191, 36, 0.18);
+          }
+        }
+
+        .demo-top-rated-badge {
+          background-size: 200% 200%;
+          animation: demoTopRatedShimmer 2.6s ease-in-out infinite;
+        }
+      `}</style>
       {/* ── FIX 2: Mobile-friendly header ── */}
       <header style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--border)", background: "var(--panel)", gap: 12, flexWrap: "wrap" }}>
         <button onClick={() => navigate("/")} style={{ background: "none", border: "1px solid var(--border)", color: "var(--muted)", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>
@@ -1298,7 +1324,34 @@ export default function Reviews() {
           <div>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>{formatProfName(selectedProf.full_name)}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>{formatProfName(selectedProf.full_name)}</div>
+                  {isDemoTopRatedProfessor(selectedProf.full_name) && (
+                    <span
+                      className="demo-top-rated-badge"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "7px 14px",
+                        borderRadius: 999,
+                        background: "linear-gradient(135deg, rgba(250, 204, 21, 0.28), rgba(251, 146, 60, 0.24), rgba(244, 114, 182, 0.22))",
+                        border: "1px solid rgba(250, 204, 21, 0.6)",
+                        boxShadow: "0 0 0 1px rgba(255,255,255,0.06) inset, 0 10px 24px rgba(251, 191, 36, 0.2)",
+                        color: "#fde68a",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <span style={{ fontSize: 13, filter: "drop-shadow(0 0 8px rgba(250, 204, 21, 0.55))" }}>★</span>
+                      Top rated
+                    </span>
+                  )}
+                </div>
                 {profAvg && profAvg.count > 0 && (
                   <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 4 }}>
                     {profAvg.count} review{profAvg.count !== 1 ? "s" : ""} · avg {profAvg.rating}/5
