@@ -10,12 +10,78 @@ function getAuthErrorMessage(error: unknown) {
   return clerkError.errors?.[0]?.longMessage || clerkError.errors?.[0]?.message || clerkError.message || "Something went wrong. Please try again.";
 }
 
+type SignInFactorState = {
+  strategy: "email_code" | "phone_code" | "totp" | "backup_code";
+  label: string;
+  prepare?: { strategy: "email_code"; emailAddressId?: string } | { strategy: "phone_code"; phoneNumberId?: string };
+};
+
 function CustomSignIn({ onSwitchToSignUp }: { onSwitchToSignUp: () => void }) {
   const { isLoaded, signIn, setActive } = useSignIn();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [pendingFactor, setPendingFactor] = useState<SignInFactorState | null>(null);
+
+  const finishSignIn = async (sessionId: string | null) => {
+    if (sessionId) {
+      await setActive({ session: sessionId });
+    }
+  };
+
+  const beginSecondFactor = async (resource: typeof signIn) => {
+    const secondFactors = resource.supportedSecondFactors ?? [];
+
+    const emailFactor = secondFactors.find((factor) => factor.strategy === "email_code");
+    if (emailFactor && "emailAddressId" in emailFactor) {
+      await resource.prepareSecondFactor({
+        strategy: "email_code",
+        emailAddressId: emailFactor.emailAddressId,
+      });
+      setPendingFactor({
+        strategy: "email_code",
+        label: `Enter the code sent to ${emailFactor.safeIdentifier || "your email"}.`,
+        prepare: { strategy: "email_code", emailAddressId: emailFactor.emailAddressId },
+      });
+      return;
+    }
+
+    const phoneFactor = secondFactors.find((factor) => factor.strategy === "phone_code");
+    if (phoneFactor && "phoneNumberId" in phoneFactor) {
+      await resource.prepareSecondFactor({
+        strategy: "phone_code",
+        phoneNumberId: phoneFactor.phoneNumberId,
+      });
+      setPendingFactor({
+        strategy: "phone_code",
+        label: `Enter the code sent to ${phoneFactor.safeIdentifier || "your phone"}.`,
+        prepare: { strategy: "phone_code", phoneNumberId: phoneFactor.phoneNumberId },
+      });
+      return;
+    }
+
+    const totpFactor = secondFactors.find((factor) => factor.strategy === "totp");
+    if (totpFactor) {
+      setPendingFactor({
+        strategy: "totp",
+        label: "Enter the 6-digit code from your authenticator app.",
+      });
+      return;
+    }
+
+    const backupFactor = secondFactors.find((factor) => factor.strategy === "backup_code");
+    if (backupFactor) {
+      setPendingFactor({
+        strategy: "backup_code",
+        label: "Enter one of your backup codes.",
+      });
+      return;
+    }
+
+    setError("Clerk asked for a second step, but this login page does not recognize the available factor yet.");
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -37,9 +103,14 @@ function CustomSignIn({ onSwitchToSignUp }: { onSwitchToSignUp: () => void }) {
       });
 
       if (result.status === "complete" && result.createdSessionId) {
-        await setActive({ session: result.createdSessionId });
+        await finishSignIn(result.createdSessionId);
+      } else if (result.status === "needs_second_factor") {
+        setCode("");
+        await beginSecondFactor(result);
+      } else if (result.status === "needs_new_password") {
+        setError("This account needs a password reset before it can sign in.");
       } else {
-        setError("Sign in needs one more step. Please check your Clerk authentication settings.");
+        setError(`Clerk returned sign-in status: ${result.status}.`);
       }
     } catch (err) {
       setError(getAuthErrorMessage(err));
@@ -47,6 +118,90 @@ function CustomSignIn({ onSwitchToSignUp }: { onSwitchToSignUp: () => void }) {
       setSubmitting(false);
     }
   };
+
+  const handleSecondFactorSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isLoaded || !pendingFactor) return;
+
+    setError("");
+    setSubmitting(true);
+    try {
+      const result =
+        pendingFactor.strategy === "totp"
+          ? await signIn.attemptSecondFactor({ strategy: "totp", code })
+          : pendingFactor.strategy === "backup_code"
+            ? await signIn.attemptSecondFactor({ strategy: "backup_code", code })
+            : await signIn.attemptSecondFactor({ strategy: pendingFactor.strategy, code });
+
+      if (result.status === "complete" && result.createdSessionId) {
+        await finishSignIn(result.createdSessionId);
+      } else {
+        setError(`Clerk returned sign-in status: ${result.status}.`);
+      }
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResendSecondFactor = async () => {
+    if (!pendingFactor?.prepare) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      await signIn.prepareSecondFactor(pendingFactor.prepare);
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (pendingFactor) {
+    return (
+      <form className="uf-auth-form" onSubmit={handleSecondFactorSubmit}>
+        <div className="uf-auth-heading">
+          <h1>Second step</h1>
+          <p>{pendingFactor.label}</p>
+        </div>
+        {error && <div className="uf-banner uf-banner--error">{error}</div>}
+        <label className="uf-field">
+          <span>{pendingFactor.strategy === "backup_code" ? "Backup code" : "Verification code"}</span>
+          <input
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder={pendingFactor.strategy === "backup_code" ? "Enter backup code" : "Enter code"}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+          />
+        </label>
+        <button className="uf-submit" type="submit" disabled={submitting || !isLoaded}>
+          {submitting ? "Verifying..." : "Continue"}
+        </button>
+        {pendingFactor.prepare && (
+          <button className="uf-secondary-button" type="button" disabled={submitting || !isLoaded} onClick={handleResendSecondFactor}>
+            Resend code
+          </button>
+        )}
+        <div className="uf-auth-switch">
+          Wrong account?{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setPendingFactor(null);
+              setCode("");
+              setPassword("");
+              setError("");
+            }}
+          >
+            Start over
+          </button>
+        </div>
+      </form>
+    );
+  }
 
   return (
     <form className="uf-auth-form" onSubmit={handleSubmit}>
@@ -385,6 +540,20 @@ const css = `
     transform: translateY(-1px);
   }
   .uf-submit:disabled {
+    opacity: .65;
+    cursor: not-allowed;
+  }
+  .uf-secondary-button {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #1f2937;
+    padding: 10px 16px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .uf-secondary-button:disabled {
     opacity: .65;
     cursor: not-allowed;
   }
